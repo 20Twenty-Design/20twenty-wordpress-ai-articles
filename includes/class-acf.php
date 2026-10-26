@@ -53,14 +53,4 @@ class ACF {
 		}
 		return $count;
 	}
-
-	/**
-	 * Write the summary into the configured ACF field, if any.
-	 */
-	public static function write_summary( $post_id, $summary ) {
-		$field = Settings::get( 'acf_summary_field' );
-		if ( $field && self::is_active() && '' !== $summary ) {
-			update_field( $field, $summary, $post_id );
-		}
-	}
 }

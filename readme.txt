@@ -20,24 +20,30 @@ The AI connection is treated as a dependency: until a provider is connected, the
 
 Every article-like post type (public, block editor, non-hierarchical; never Pages) gets an "AI Article" submenu, e.g. Posts → AI Article.
 
-Form: main title, optional focus keyword, length (short/medium/long), category (or let AI choose), main CTA page (contact page preselected), internal links (none / let AI decide / selected pages), featured image (AI generate / upload / none), "Copy ACF from last article", additional instructions.
+Form: main title, optional focus keyword, length (as other articles / short / medium / long), category (or let AI choose), main CTA page (contact page preselected), internal links (none / let AI decide / selected pages), featured image (AI generate / upload / none), "Copy ACF from last article", additional instructions.
 
 Generation runs in the background. After clicking "Generate draft" you can leave the page and keep working anywhere in wp-admin:
 
 * The admin bar shows live progress ("AI writing… 45%") with a panel of recent jobs.
-* A toast appears on whatever screen you are on when the draft is ready (Edit draft / Preview) or failed (Retry).
+* A notification appears at the top of whatever screen you are on when the draft is ready (Edit draft / Preview) or failed (Retry); inside the block editor it is shown as a native editor notice.
 * Optional desktop notification when the tab is in the background.
 * Failed stages retry automatically (3 attempts), then can be retried manually from the failed stage. Running jobs can be cancelled.
 
 Pipeline (each stage runs in its own background request: non-blocking loopback to admin-ajax.php, WP-Cron fallback, and as a last resort the polling request itself):
 
-1. Analyse recent published articles of the same post type → house style guide (cached until those articles change).
+1. Analyse the first (oldest) published articles of the same post type → house style guide (cached until those articles change). Articles created by this plugin are never used as reference, so the voice does not drift towards AI-written content. "As other articles" length uses their average word count.
 2. Plan: outline, focus + secondary keywords, SEO title, slug, meta description, excerpt, summary, key takeaways, category, image prompt + alt text.
 3. Write: AI returns structured JSON that is converted to native Gutenberg blocks (headings, paragraphs, lists, quotes, bold/italic, links, CTA buttons). Links pointing anywhere other than the allowed internal pages are removed.
 4. Featured image: converted to WebP at 80% quality (sub-sizes too), resized to the max width, AI alt text.
 5. Draft created (never published) with excerpt, category and featured image.
 6. ACF fields copied from the last published article (optional).
 7. SEO: Yoast SEO, Rank Math, AIOSEO, SEOPress or The SEO Framework get SEO title, meta description, focus + other keywords and schema type. Without an SEO plugin a warning is shown and AI Articles prints the meta description and JSON-LD itself.
+
+== Cost and time estimate ==
+
+Before you click Generate, the summary shows estimated tokens, cost and time for the current choices (length, image, links, extras), with a per-step breakdown. Estimates start from built-in defaults and learn from your own generations: the WordPress AI Client reports real token usage and the model used, and each step is timed. Finished jobs show the actual tokens, cost and duration.
+
+Cost uses built-in approximate list prices per model (Claude, OpenAI, Google). Set your own prices under Settings → AI Articles if your contract or currency differs, or extend the table with the `tai_model_prices` / `tai_image_prices` filters.
 
 == Schema / headless ==
 
@@ -51,7 +57,7 @@ Jobs are stored as private `tai_job` posts and removed after 14 days.
 
 == Settings ==
 
-Settings → AI Articles: enabled post types, word counts, number of articles analysed, brand notes, key takeaways / FAQ / H1 block toggles, schema output, image style + max width, ACF field for the summary.
+Settings → AI Articles: enabled post types, word counts, number of reference articles, brand notes, key takeaways (off by default) / FAQ / H1 block toggles, schema output, image style + max width.
 
 == Updates ==
 

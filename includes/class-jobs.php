@@ -293,11 +293,33 @@ class Jobs {
 		$stages = Generator::stages( $job );
 		$stage  = $stages[ $job['index'] ];
 
-		$job['state'] = 'running';
-		$job['label'] = Generator::running_label( $stage, $job );
+		$job['state']   = 'running';
+		$job['label']   = Generator::running_label( $stage, $job );
+		$job['started'] = $job['started'] ?? time();
 		self::save( $job );
 
-		$detail = Generator::run( $stage, $job );
+		AI::$usage = array();
+		$timer     = microtime( true );
+		$detail    = Generator::run( $stage, $job );
+		$metrics   = array(
+			'sec'    => round( microtime( true ) - $timer, 1 ),
+			'in'     => 0,
+			'out'    => 0,
+			'images' => 0,
+		);
+		foreach ( AI::$usage as $call ) {
+			if ( 'image' === $call['kind'] ) {
+				++$metrics['images'];
+				$metrics['image_model']    = $call['model'];
+				$metrics['image_provider'] = $call['provider'];
+			} else {
+				$metrics['in']        += $call['in'];
+				$metrics['out']       += $call['out'];
+				$metrics['text_model'] = $call['model'];
+				$metrics['provider']   = $call['provider'];
+			}
+		}
+		$job['metrics'][ $stage ] = $metrics;
 
 		if ( is_wp_error( $detail ) ) {
 			++$job['attempts'];
@@ -325,9 +347,11 @@ class Jobs {
 		$job['progress'] = Generator::progress( $job, $job['index'] );
 
 		if ( $job['index'] >= count( $stages ) ) {
-			$job['state']  = 'done';
-			$job['label']  = '';
-			$job['result'] = Generator::result( $job );
+			$job['state']   = 'done';
+			$job['label']   = '';
+			$job['updated'] = time();
+			$job['result']  = Generator::result( $job );
+			Estimator::learn( $job );
 			// Drop bulky intermediate data once the draft exists.
 			unset( $job['content'], $job['style'] );
 			self::save( $job );

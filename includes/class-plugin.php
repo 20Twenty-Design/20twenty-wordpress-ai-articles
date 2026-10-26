@@ -144,6 +144,52 @@ final class Plugin {
 	}
 
 	/**
+	 * Reference articles for tone and length: the FIRST (oldest) published articles, skipping any created
+	 * by this plugin, so the voice never drifts towards AI-written content.
+	 *
+	 * @return \WP_Post[]
+	 */
+	public static function reference_posts( $post_type, $count = null ) {
+		$count = null === $count ? (int) Settings::get( 'scan_count' ) : (int) $count;
+		if ( $count < 1 ) {
+			return array();
+		}
+		return get_posts(
+			array(
+				'post_type'      => $post_type,
+				'post_status'    => 'publish',
+				'posts_per_page' => $count,
+				'orderby'        => 'date',
+				'order'          => 'ASC',
+				'no_found_rows'  => true,
+				'meta_query'     => array( // phpcs:ignore WordPress.DB.SlowDBQuery
+					array(
+						'key'     => '_tai_generated',
+						'compare' => 'NOT EXISTS',
+					),
+				),
+			)
+		);
+	}
+
+	/**
+	 * Average word count of the reference articles (0 when there are none).
+	 */
+	public static function reference_word_count( $post_type ) {
+		$posts = self::reference_posts( $post_type );
+		if ( ! $posts ) {
+			return 0;
+		}
+		$total = 0;
+		foreach ( $posts as $post ) {
+			$total += Blocks::word_count( strip_shortcodes( $post->post_content ) );
+		}
+		$average = $total / count( $posts );
+		$step    = $average < 200 ? 10 : 50;
+		return (int) min( 6000, max( 300, round( $average / $step ) * $step ) ); // Floor keeps stub posts from producing stub articles.
+	}
+
+	/**
 	 * Category-like taxonomy for a post type ('category' for posts, first hierarchical taxonomy otherwise).
 	 */
 	public static function category_taxonomy( $post_type ) {
@@ -284,7 +330,7 @@ final class Plugin {
 		?>
 		<div class="wrap tai-wrap">
 			<div class="tai-hero">
-				<span class="tai-hero__icon"><span class="dashicons dashicons-edit-large" aria-hidden="true"></span></span>
+				<span class="tai-hero__icon" aria-hidden="true">20</span>
 				<div>
 					<h1 class="tai-hero__title">
 						<?php
@@ -311,13 +357,17 @@ final class Plugin {
 
 		wp_enqueue_media();
 		wp_enqueue_style( 'tai-admin', TAI_URL . 'assets/admin.css', array( 'wp-components' ), TAI_VERSION );
-		wp_enqueue_script( 'tai-admin', TAI_URL . 'assets/admin.js', array( 'wp-element', 'wp-components', 'wp-api-fetch', 'wp-i18n', 'tai-notifier' ), TAI_VERSION, true );
+		wp_enqueue_script( 'tai-emoji', TAI_URL . 'assets/emoji.js', array( 'wp-element' ), TAI_VERSION, true );
+		wp_enqueue_script( 'tai-admin', TAI_URL . 'assets/admin.js', array( 'wp-element', 'wp-components', 'wp-api-fetch', 'wp-i18n', 'tai-notifier', 'tai-emoji' ), TAI_VERSION, true );
 		wp_set_script_translations( 'tai-admin', 'twenty-ai-articles' );
 
 		$pages   = self::pages();
 		$last    = ACF::is_active() ? ACF::last_article( $post_type ) : null;
 		$lengths = array();
-		foreach ( Settings::lengths() as $key => $length ) {
+		foreach ( Settings::lengths( $post_type ) as $key => $length ) {
+			if ( 'auto' === $key && ! $length['words'] ) {
+				continue; // Nothing to compare with yet.
+			}
 			$lengths[] = array(
 				'value' => $key,
 				'label' => $length['label'],
@@ -352,6 +402,8 @@ final class Plugin {
 			'canUpload'     => current_user_can( 'upload_files' ),
 			'settingsUrl'   => current_user_can( 'manage_options' ) ? admin_url( 'options-general.php?page=tai-settings' ) : '',
 			'scanCount'     => (int) Settings::get( 'scan_count' ),
+			'iconsUrl'      => TAI_URL . 'assets/icons/',
+			'estimate'      => Estimator::client_data( $post_type ),
 		);
 		wp_add_inline_script( 'tai-admin', 'window.taiData = ' . wp_json_encode( $data ) . ';', 'before' );
 	}

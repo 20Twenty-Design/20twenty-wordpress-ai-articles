@@ -125,30 +125,15 @@ class Generator {
 	 * ------------------------------------------------------------------- */
 
 	private static function stage_analyze( array &$job ) {
-		$job['style'] = '';
-		$count        = (int) Settings::get( 'scan_count' );
-		$posts        = $count ? get_posts(
-			array(
-				'post_type'      => $job['input']['post_type'],
-				'post_status'    => 'publish',
-				'posts_per_page' => $count,
-				'orderby'        => 'date',
-				'order'          => 'DESC',
-				'no_found_rows'  => true,
-			)
-		) : array();
+		$job['style']     = '';
+		$job['ref_words'] = Plugin::reference_word_count( $job['input']['post_type'] );
+		$posts            = Plugin::reference_posts( $job['input']['post_type'] );
 
 		if ( ! $posts ) {
 			return __( 'No published articles to learn from yet — using a clear, professional voice.', 'twenty-ai-articles' );
 		}
 
-		$fingerprint = array_map(
-			function ( $p ) {
-				return $p->ID . ':' . $p->post_modified_gmt;
-			},
-			$posts
-		);
-		$cache_key   = 'tai_style_' . md5( $job['input']['post_type'] . '|' . implode( ',', $fingerprint ) . '|' . get_locale() );
+		$cache_key = self::style_cache_key( $job['input']['post_type'], $posts );
 
 		if ( empty( $job['input']['refresh_style'] ) ) {
 			$cached = get_transient( $cache_key );
@@ -161,7 +146,7 @@ class Generator {
 
 		$samples = implode( "\n\n-----\n\n", array_map( array( __CLASS__, 'sample' ), $posts ) );
 		$prompt  = <<<PROMPT
-Below are the most recent articles published on this website. Analyse them and write a concise HOUSE STYLE GUIDE (max 300 words, bullet points) that another writer can follow to produce a new article that feels written by the same team. Cover:
+Below are the first articles published on this website (the reference for its voice). Analyse them and write a concise HOUSE STYLE GUIDE (max 300 words, bullet points) that another writer can follow to produce a new article that feels written by the same team. Cover:
 - Tone of voice and formality, point of view (we/you/I), how the reader is addressed
 - Target audience and assumed expertise
 - Typical article length and structure (intro style, H2/H3 usage and phrasing pattern, section length, conclusion style)
@@ -306,6 +291,8 @@ PROMPT;
 		$in    = $job['input'];
 		$plan  = $job['plan'];
 		$words = self::target_words( $job );
+
+		$job['target_words'] = $words;
 		$extra = '' !== $in['instructions'] ? $in['instructions'] : 'None.';
 
 		// Internal links.
@@ -521,8 +508,6 @@ PROMPT;
 			}
 		}
 
-		ACF::write_summary( $post_id, $plan['summary'] );
-
 		/* translators: %d: post ID. */
 		return sprintf( __( 'Draft #%d saved (not published).', 'twenty-ai-articles' ), $post_id );
 	}
@@ -534,7 +519,6 @@ PROMPT;
 			return __( 'Nothing to copy.', 'twenty-ai-articles' );
 		}
 		$count = ACF::copy( $last->ID, $job['post_id'] );
-		ACF::write_summary( $job['post_id'], $job['plan']['summary'] ); // Copy must not overwrite the new summary.
 
 		/* translators: 1: number of fields, 2: article title. */
 		return sprintf( __( '%1$d fields copied from “%2$s”.', 'twenty-ai-articles' ), $count, html_entity_decode( get_the_title( $last ) ) );
@@ -578,12 +562,35 @@ PROMPT;
 			'image'            => ! empty( $job['image_id'] ) ? wp_get_attachment_image_url( $job['image_id'], 'medium' ) : '',
 			'image_alt'        => ! empty( $job['image_id'] ) ? $job['plan']['image_alt'] : '',
 			'seo_plugin'       => $job['seo_plugin'] ?? null,
+			'usage'            => self::usage_summary( $job ),
+		);
+	}
+
+	/**
+	 * Actual tokens, cost and duration of a finished job.
+	 */
+	public static function usage_summary( array $job ) {
+		$metrics = $job['metrics'] ?? array();
+		$tokens  = 0;
+		$model   = '';
+		foreach ( $metrics as $m ) {
+			$tokens += (int) ( $m['in'] ?? 0 ) + (int) ( $m['out'] ?? 0 );
+			$model   = ! empty( $m['text_model'] ) ? $m['text_model'] : $model;
+		}
+		return array(
+			'tokens'  => $tokens,
+			'cost'    => Estimator::cost( $metrics ),
+			'seconds' => isset( $job['started'] ) ? max( 0, (int) $job['updated'] - (int) $job['started'] ) : 0,
+			'model'   => $model,
 		);
 	}
 
 	private static function target_words( array $job ) {
 		$lengths = Settings::lengths();
-		return $lengths[ $job['input']['length'] ]['words'] ?? 1300;
+		if ( 'auto' === $job['input']['length'] ) {
+			return ! empty( $job['ref_words'] ) ? (int) $job['ref_words'] : $lengths['medium']['words'];
+		}
+		return $lengths[ $job['input']['length'] ]['words'] ?? $lengths['medium']['words'];
 	}
 
 	private static function system() {
@@ -599,9 +606,22 @@ PROMPT;
 	}
 
 	/**
+	 * Cache key of the tone profile; changes when the reference articles change.
+	 */
+	public static function style_cache_key( $post_type, array $posts ) {
+		$fingerprint = array_map(
+			function ( $p ) {
+				return $p->ID . ':' . $p->post_modified_gmt;
+			},
+			$posts
+		);
+		return 'tai_style_' . md5( $post_type . '|' . implode( ',', $fingerprint ) . '|' . get_locale() );
+	}
+
+	/**
 	 * Compact representation of an existing article for style analysis.
 	 */
-	private static function sample( $post ) {
+	public static function sample( $post ) {
 		$html = $post->post_content;
 		preg_match_all( '#<h([1-6])[^>]*>(.*?)</h\1>#is', $html, $m, PREG_SET_ORDER );
 		$headings = array_map(

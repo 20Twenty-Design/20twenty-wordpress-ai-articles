@@ -25,13 +25,15 @@ class Settings {
 			'word_long'         => 2200,
 			'scan_count'        => 5,
 			'h1_block'          => 0,
-			'key_takeaways'     => 1,
+			'key_takeaways'     => 0,
 			'faq'               => 1,
 			'schema'            => 1,
 			'image_style'       => 'Photorealistic editorial photo, natural lighting, no text, letters, watermarks or logos.',
 			'image_max_width'   => 1600,
-			'acf_summary_field' => '',
 			'brand_notes'       => '',
+			'price_text_in'     => '',
+			'price_text_out'    => '',
+			'price_image'       => '',
 		);
 	}
 
@@ -45,10 +47,15 @@ class Settings {
 	}
 
 	/**
-	 * Target word counts keyed by length option.
+	 * Target word counts keyed by length option. "auto" follows the reference articles of the post type.
 	 */
-	public static function lengths() {
+	public static function lengths( $post_type = '' ) {
+		$auto = $post_type ? Plugin::reference_word_count( $post_type ) : 0;
 		return array(
+			'auto'   => array(
+				'label' => __( 'As other articles', 'twenty-ai-articles' ),
+				'words' => $auto,
+			),
 			'short'  => array(
 				'label' => __( 'Short', 'twenty-ai-articles' ),
 				'words' => (int) self::get( 'word_short' ),
@@ -93,9 +100,12 @@ class Settings {
 			$out[ $key ] = empty( $input[ $key ] ) ? 0 : 1;
 		}
 
-		$out['image_style']       = sanitize_textarea_field( $input['image_style'] ?? '' );
-		$out['brand_notes']       = sanitize_textarea_field( $input['brand_notes'] ?? '' );
-		$out['acf_summary_field'] = sanitize_key( $input['acf_summary_field'] ?? '' );
+		foreach ( array( 'price_text_in', 'price_text_out', 'price_image' ) as $key ) {
+			$value       = trim( (string) ( $input[ $key ] ?? '' ) );
+			$out[ $key ] = '' === $value ? '' : (string) max( 0, (float) str_replace( ',', '.', $value ) );
+		}
+		$out['image_style'] = sanitize_textarea_field( $input['image_style'] ?? '' );
+		$out['brand_notes'] = sanitize_textarea_field( $input['brand_notes'] ?? '' );
 
 		return $out;
 	}
@@ -170,12 +180,13 @@ class Settings {
 									<input type="number" min="200" max="6000" step="50" class="small-text" name="<?php echo esc_attr( $name . '[' . $key . ']' ); ?>" value="<?php echo esc_attr( $s[ $key ] ); ?>">
 								</label>
 							<?php endforeach; ?>
+							<p class="description"><?php esc_html_e( 'Writers can also choose "As other articles", which matches the average length of the reference articles.', 'twenty-ai-articles' ); ?></p>
 						</td>
 					</tr>
 					<tr>
 						<th scope="row"><label for="tai-scan"><?php esc_html_e( 'Articles to analyse for tone', 'twenty-ai-articles' ); ?></label></th>
 						<td><input id="tai-scan" type="number" min="0" max="15" class="small-text" name="<?php echo esc_attr( $name ); ?>[scan_count]" value="<?php echo esc_attr( $s['scan_count'] ); ?>">
-							<p class="description"><?php esc_html_e( 'Most recent published articles of the same post type. The tone profile is cached until those articles change.', 'twenty-ai-articles' ); ?></p></td>
+							<p class="description"><?php esc_html_e( 'The first (oldest) published articles of the same post type, so AI-generated articles never become the reference. Articles created by this plugin are always skipped. The tone profile is cached until those articles change; "As other articles" length uses their average word count.', 'twenty-ai-articles' ); ?></p></td>
 					</tr>
 					<tr>
 						<th scope="row"><label for="tai-brand"><?php esc_html_e( 'Brand / voice notes', 'twenty-ai-articles' ); ?></label></th>
@@ -206,9 +217,31 @@ class Settings {
 							<p class="description"><?php esc_html_e( 'Featured images are resized to this width and saved as WebP at 80% quality.', 'twenty-ai-articles' ); ?></p></td>
 					</tr>
 					<tr>
-						<th scope="row"><label for="tai-acf-summary"><?php esc_html_e( 'ACF summary field', 'twenty-ai-articles' ); ?></label></th>
-						<td><input id="tai-acf-summary" type="text" class="regular-text" name="<?php echo esc_attr( $name ); ?>[acf_summary_field]" value="<?php echo esc_attr( $s['acf_summary_field'] ); ?>" placeholder="summary">
-							<p class="description"><?php esc_html_e( 'Optional ACF field name that should receive the AI-written summary.', 'twenty-ai-articles' ); ?></p></td>
+						<th scope="row"><?php esc_html_e( 'Cost estimate prices', 'twenty-ai-articles' ); ?></th>
+						<td>
+							<?php
+							$stats = Estimator::stats();
+							$model = $stats['text']['model'] ?? '';
+							$auto  = $model ? Estimator::text_price( $model ) : null;
+							?>
+							<label style="margin-right:1em"><?php esc_html_e( 'Input $ / 1M tokens', 'twenty-ai-articles' ); ?>
+								<input type="text" inputmode="decimal" class="small-text" name="<?php echo esc_attr( $name ); ?>[price_text_in]" value="<?php echo esc_attr( $s['price_text_in'] ); ?>" placeholder="<?php echo esc_attr( $auto && 'list' === $auto['source'] ? $auto['in'] : '' ); ?>">
+							</label>
+							<label style="margin-right:1em"><?php esc_html_e( 'Output $ / 1M tokens', 'twenty-ai-articles' ); ?>
+								<input type="text" inputmode="decimal" class="small-text" name="<?php echo esc_attr( $name ); ?>[price_text_out]" value="<?php echo esc_attr( $s['price_text_out'] ); ?>" placeholder="<?php echo esc_attr( $auto && 'list' === $auto['source'] ? $auto['out'] : '' ); ?>">
+							</label>
+							<label><?php esc_html_e( '$ per image', 'twenty-ai-articles' ); ?>
+								<input type="text" inputmode="decimal" class="small-text" name="<?php echo esc_attr( $name ); ?>[price_image]" value="<?php echo esc_attr( $s['price_image'] ); ?>">
+							</label>
+							<p class="description">
+								<?php
+								echo $model
+									/* translators: %s: model id. */
+									? esc_html( sprintf( __( 'Last model used: %s. Leave empty to use built-in list prices (approximate); fill in to match your own pricing or currency.', 'twenty-ai-articles' ), $model ) )
+									: esc_html__( 'Leave empty to use built-in list prices once the first article reveals which model your connector uses.', 'twenty-ai-articles' );
+								?>
+							</p>
+						</td>
 					</tr>
 				</table>
 				<?php submit_button(); ?>

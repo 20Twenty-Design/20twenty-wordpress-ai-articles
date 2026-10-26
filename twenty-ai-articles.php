@@ -27,6 +27,7 @@ require_once TAI_DIR . 'includes/class-image.php';
 require_once TAI_DIR . 'includes/class-seo.php';
 require_once TAI_DIR . 'includes/class-acf.php';
 require_once TAI_DIR . 'includes/class-generator.php';
+require_once TAI_DIR . 'includes/class-estimator.php';
 require_once TAI_DIR . 'includes/class-jobs.php';
 require_once TAI_DIR . 'includes/class-rest.php';
 require_once TAI_DIR . 'includes/class-updater.php';

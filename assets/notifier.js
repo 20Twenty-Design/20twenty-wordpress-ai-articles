@@ -165,43 +165,60 @@
 	}
 
 	let toastRoot = null;
+	/**
+	 * In-WordPress notification at the top of the screen. The block editor gets a native editor notice
+	 * (shown above the canvas); every other admin screen gets a banner pinned below the admin bar.
+	 */
 	function toast( job ) {
+		const done = job.state === 'done';
+		const title = done ? __( 'Your AI draft is ready', TD ) : __( 'AI article generation failed', TD );
+
+		const notices = wp.data && wp.data.dispatch && document.body.classList.contains( 'block-editor-page' ) ? wp.data.dispatch( 'core/notices' ) : null;
+		if ( notices && notices.createNotice ) {
+			notices.createNotice( done ? 'success' : 'error', title + ': ' + job.title + ( ! done && job.error ? ' — ' + job.error : '' ), {
+				id: 'tai-job-' + job.id,
+				isDismissible: true,
+				actions: done
+					? [
+						{ label: __( 'Edit draft', TD ), url: job.result.edit_url },
+						{ label: __( 'Preview', TD ), url: job.result.preview_url },
+					]
+					: [ { label: __( 'Retry', TD ), onClick: () => window.taiJobs.retry( job.id ) } ],
+			} );
+			return;
+		}
+
 		if ( ! toastRoot ) {
-			toastRoot = el( 'div', { className: 'tai-toasts', 'aria-live': 'polite' } );
+			toastRoot = el( 'div', { className: 'tai-banners', 'aria-live': 'polite' } );
 			document.body.appendChild( toastRoot );
 		}
-		const done = job.state === 'done';
 		const close = () => {
 			node.classList.add( 'is-leaving' );
-			setTimeout( () => node.remove(), 200 );
-		};
-		const dismiss = () => {
-			markSeen( job.id );
-			close();
+			setTimeout( () => node.remove(), 250 );
 		};
 
 		const actions = done
 			? [
-				el( 'a', { className: 'tai-toast__btn is-primary', href: job.result.edit_url, onClick: () => markSeen( job.id ) }, __( 'Edit draft', TD ) ),
-				el( 'a', { className: 'tai-toast__btn', href: job.result.preview_url, target: '_blank', rel: 'noopener', onClick: () => markSeen( job.id ) }, __( 'Preview', TD ) ),
+				el( 'a', { className: 'tai-banner__btn is-primary', href: job.result.edit_url }, __( 'Edit draft', TD ) ),
+				el( 'a', { className: 'tai-banner__btn', href: job.result.preview_url, target: '_blank', rel: 'noopener' }, __( 'Preview', TD ) ),
 			]
 			: [
-				el( 'button', { type: 'button', className: 'tai-toast__btn is-primary', onClick: () => { window.taiJobs.retry( job.id ); close(); } }, __( 'Retry', TD ) ),
-				el( 'a', { className: 'tai-toast__btn', href: job.generator }, __( 'Details', TD ) ),
+				el( 'button', { type: 'button', className: 'tai-banner__btn is-primary', onClick: () => { window.taiJobs.retry( job.id ); close(); } }, __( 'Retry', TD ) ),
+				el( 'a', { className: 'tai-banner__btn', href: job.generator }, __( 'Details', TD ) ),
 			];
 
-		const node = el( 'div', { className: 'tai-toast ' + ( done ? 'is-success' : 'is-error' ), role: done ? 'status' : 'alert' }, [
-			el( 'span', { className: 'tai-toast__icon dashicons ' + ( done ? 'dashicons-yes-alt' : 'dashicons-warning' ), 'aria-hidden': 'true' } ),
-			el( 'div', { className: 'tai-toast__body' }, [
-				el( 'strong', { className: 'tai-toast__title' }, done ? __( 'Draft ready', TD ) : __( 'Generation failed', TD ) ),
-				el( 'div', { className: 'tai-toast__text' }, job.title ),
-				! done && job.error ? el( 'div', { className: 'tai-toast__error' }, job.error ) : null,
+		const node = el( 'div', { className: 'tai-banner ' + ( done ? 'is-success' : 'is-error' ), role: done ? 'status' : 'alert' }, [
+			el( 'span', { className: 'tai-banner__badge', 'aria-hidden': 'true' }, '20' ),
+			el( 'div', { className: 'tai-banner__body' }, [
+				el( 'strong', { className: 'tai-banner__title' }, title ),
+				el( 'div', { className: 'tai-banner__text' }, job.title ),
+				! done && job.error ? el( 'div', { className: 'tai-banner__error' }, job.error ) : null,
 				done && job.warnings && job.warnings.length
-					? el( 'div', { className: 'tai-toast__meta' }, sprintf( /* translators: %d: number of warnings. */ __( '%d note(s) to review', TD ), job.warnings.length ) )
+					? el( 'div', { className: 'tai-banner__meta' }, sprintf( /* translators: %d: number of notes. */ __( '%d note(s) to review in the editor', TD ), job.warnings.length ) )
 					: null,
-				el( 'div', { className: 'tai-toast__actions' }, actions ),
 			] ),
-			el( 'button', { type: 'button', className: 'tai-toast__close', 'aria-label': __( 'Dismiss', TD ), onClick: dismiss }, el( 'span', { className: 'dashicons dashicons-no-alt', 'aria-hidden': 'true' } ) ),
+			el( 'div', { className: 'tai-banner__actions' }, actions ),
+			el( 'button', { type: 'button', className: 'tai-banner__close', 'aria-label': __( 'Dismiss', TD ), onClick: close }, el( 'span', { className: 'dashicons dashicons-no-alt', 'aria-hidden': 'true' } ) ),
 		] );
 
 		toastRoot.appendChild( node );

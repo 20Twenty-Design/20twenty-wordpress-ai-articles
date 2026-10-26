@@ -1,6 +1,17 @@
 .tai-wrap {
-	--tai-accent: var(--wp-admin-theme-color, #3858e9);
-	--tai-accent-soft: color-mix(in srgb, var(--tai-accent) 9%, #fff);
+	--tai-accent: #d62827;
+	--tai-accent-dark: #b01f1e;
+	--tai-accent-soft: #fdeeee;
+	/* Brand colour for WordPress components (primary buttons, toggles, focus rings) on this screen. */
+	--wp-admin-theme-color: #d62827;
+	--wp-admin-theme-color--rgb: 214, 40, 39;
+	--wp-admin-theme-color-darker-10: #bd2322;
+	--wp-admin-theme-color-darker-10--rgb: 189, 35, 34;
+	--wp-admin-theme-color-darker-20: #a51e1d;
+	--wp-admin-theme-color-darker-20--rgb: 165, 30, 29;
+	--wp-components-color-accent: #d62827;
+	--wp-components-color-accent-darker-10: #bd2322;
+	--wp-components-color-accent-darker-20: #a51e1d;
 	--tai-border: #e0e0e0;
 	--tai-muted: #757575;
 	--tai-radius: 12px;
@@ -17,17 +28,16 @@
 .tai-hero__icon {
 	display: grid;
 	place-items: center;
-	width: 44px;
-	height: 44px;
-	border-radius: 12px;
-	background: linear-gradient(135deg, var(--tai-accent), #9b51e0);
+	flex-shrink: 0;
+	width: 46px;
+	height: 46px;
+	border-radius: 50%;
+	background: var(--tai-accent);
 	color: #fff;
-}
-
-.tai-hero__icon .dashicons {
-	font-size: 24px;
-	width: 24px;
-	height: 24px;
+	font-size: 18px;
+	font-weight: 700;
+	letter-spacing: -0.02em;
+	line-height: 1;
 }
 
 .tai-wrap h1.tai-hero__title {
@@ -537,7 +547,7 @@
 	display: block;
 	height: 100%;
 	border-radius: 3px;
-	background: linear-gradient(90deg, var(--tai-accent), #9b51e0);
+	background: linear-gradient(90deg, var(--tai-accent), #f06a3c, var(--tai-accent));
 	background-size: 200% 100%;
 	animation: tai-shimmer 2s linear infinite;
 	transition: width 0.8s ease;
@@ -746,4 +756,222 @@
 	.tai-job.is-new {
 		animation: none;
 	}
+}
+
+/* Brand icons (assets/icons), tinted with currentColor */
+.tai-ico {
+	display: inline-block;
+	flex-shrink: 0;
+	width: 20px;
+	height: 20px;
+	background-color: currentColor;
+	-webkit-mask: var(--tai-ico) center / contain no-repeat;
+	mask: var(--tai-ico) center / contain no-repeat;
+}
+
+.tai-tile__icon.tai-ico {
+	width: 26px;
+	height: 26px;
+	margin-bottom: 6px;
+}
+
+.tai-summary > ul .tai-ico {
+	width: 18px;
+	height: 18px;
+	color: var(--tai-accent);
+}
+
+.tai-dropzone__icon.tai-ico {
+	width: 36px;
+	height: 36px;
+	margin: 0 14px;
+	color: #a7aaad;
+}
+
+/* Emoji */
+.tai-summary__emoji {
+	display: flex;
+	justify-content: center;
+	margin: -4px 0 14px;
+}
+
+.tai-connect-wrap {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	margin-top: 32px;
+}
+
+.tai-connect-wrap .tai-connect {
+	margin-top: 16px;
+}
+
+.tai-emoji {
+	cursor: pointer;
+	user-select: none;
+	-webkit-tap-highlight-color: transparent;
+}
+
+.tai-emoji__svg {
+	display: block;
+	width: 100%;
+	height: 100%;
+	overflow: visible;
+	animation: tai-boing 0.55s cubic-bezier(0.34, 1.56, 0.64, 1);
+	transform-origin: 50% 85%;
+}
+
+.tai-emoji__face {
+	fill: var(--tai-accent-soft);
+	stroke: var(--tai-accent);
+	stroke-width: 7;
+}
+
+.tai-emoji__features {
+	transition: transform 0.25s ease-out;
+}
+
+.tai-emoji__features * {
+	fill: none;
+	stroke: var(--tai-accent);
+	stroke-width: 6;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+.tai-emoji__features .is-fill {
+	fill: var(--tai-accent);
+	stroke: none;
+}
+
+.tai-emoji__features .is-soft {
+	fill: #fff;
+}
+
+.tai-emoji__eyes,
+.tai-emoji__mouth {
+	transform-box: fill-box;
+	transform-origin: center;
+	animation: tai-emoji-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.tai-emoji__mouth {
+	animation-delay: 0.05s;
+}
+
+.tai-emoji__eyes.is-blinking {
+	transform: scaleY(0.1);
+	transition: transform 0.07s ease-in;
+}
+
+.tai-emoji:hover .tai-emoji__svg {
+	animation: tai-wobble 0.6s ease-in-out;
+}
+
+@keyframes tai-boing {
+	0% {
+		transform: scale(1, 1);
+	}
+	30% {
+		transform: scale(1.08, 0.9);
+	}
+	60% {
+		transform: scale(0.95, 1.06);
+	}
+	100% {
+		transform: scale(1, 1);
+	}
+}
+
+@keyframes tai-emoji-pop {
+	from {
+		opacity: 0;
+		transform: scale(0.4);
+	}
+}
+
+@keyframes tai-wobble {
+	25% {
+		transform: rotate(-6deg);
+	}
+	75% {
+		transform: rotate(6deg);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.tai-emoji__svg,
+	.tai-emoji__eyes,
+	.tai-emoji__mouth,
+	.tai-emoji:hover .tai-emoji__svg {
+		animation: none;
+	}
+}
+
+/* Estimate */
+.tai-estimate {
+	margin: 0 0 14px;
+	padding: 12px 14px;
+	border-radius: 10px;
+	background: #f6f7f7;
+}
+
+.tai-estimate__stats {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 8px;
+}
+
+.tai-estimate__stats span {
+	display: block;
+	font-size: 11px;
+	text-transform: uppercase;
+	color: var(--tai-muted);
+}
+
+.tai-estimate__stats strong {
+	font-size: 15px;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+.tai-estimate__note {
+	margin: 8px 0 0;
+	font-size: 12px;
+	color: var(--tai-muted);
+}
+
+.tai-linkbtn {
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--tai-accent);
+	cursor: pointer;
+	font-size: inherit;
+	text-decoration: underline;
+}
+
+.tai-estimate__table {
+	width: 100%;
+	margin-top: 8px;
+	border-collapse: collapse;
+	font-size: 12px;
+}
+
+.tai-estimate__table th,
+.tai-estimate__table td {
+	padding: 4px 0;
+	border-top: 1px solid #e0e0e0;
+	text-align: left;
+	font-weight: 400;
+}
+
+.tai-estimate__table td {
+	padding-left: 18px;
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+}
+
+.tai-estimate__table small {
+	color: var(--tai-muted);
 }

@@ -17,6 +17,13 @@ class AI {
 	const TIMEOUT = 240;
 
 	/**
+	 * Usage of the calls made in this request: kind, in, out, model, provider. Read by the job runner.
+	 *
+	 * @var array[]
+	 */
+	public static $usage = array();
+
+	/**
 	 * Whether a WordPress AI Client exists (WordPress 7.0+ core or the AI plugin) and AI is not disabled.
 	 */
 	public static function is_available() {
@@ -122,10 +129,12 @@ class AI {
 					return $builder;
 				}
 
-				$result = self::invoke( $builder, 'generate_text' );
+				// generate_text_result() also reports token usage and the model that ran.
+				$result = self::invoke( $builder, 'generate_text_result' );
 				if ( is_wp_error( $result ) ) {
 					return $result;
 				}
+				self::record( $result, 'text' );
 				if ( is_object( $result ) ) {
 					foreach ( array( 'toText', 'to_text' ) as $method ) {
 						if ( method_exists( $result, $method ) ) {
@@ -182,16 +191,50 @@ class AI {
 		return self::run(
 			function () use ( $prompt ) {
 				// Prefer a 16:9 image; not every model accepts an aspect ratio, so retry without it.
-				$result = self::invoke( self::chain( self::builder( $prompt ), 'as_output_media_aspect_ratio', array( '16:9' ) ), 'generate_image' );
+				$result = self::invoke( self::chain( self::builder( $prompt ), 'as_output_media_aspect_ratio', array( '16:9' ) ), 'generate_image_result' );
 				if ( is_wp_error( $result ) ) {
-					$result = self::invoke( self::builder( $prompt ), 'generate_image' );
+					$result = self::invoke( self::builder( $prompt ), 'generate_image_result' );
 				}
 				if ( is_wp_error( $result ) ) {
 					return $result;
 				}
+				self::record( $result, 'image' );
 				return self::image_bytes( $result );
 			}
 		);
+	}
+
+	/**
+	 * Remember token usage and model of a GenerativeAiResult.
+	 */
+	private static function record( $result, $kind ) {
+		$entry = array(
+			'kind'     => $kind,
+			'in'       => 0,
+			'out'      => 0,
+			'model'    => '',
+			'provider' => '',
+		);
+		if ( is_object( $result ) ) {
+			try {
+				if ( method_exists( $result, 'getTokenUsage' ) && ( $usage = $result->getTokenUsage() ) ) {
+					$in           = (int) $usage->getPromptTokens();
+					$out          = (int) $usage->getCompletionTokens();
+					$total        = method_exists( $usage, 'getTotalTokens' ) ? (int) $usage->getTotalTokens() : 0;
+					$entry['in']  = $in;
+					$entry['out'] = max( $out, $total - $in ); // Includes reasoning tokens when the provider reports them separately.
+				}
+				if ( method_exists( $result, 'getModelMetadata' ) && ( $model = $result->getModelMetadata() ) ) {
+					$entry['model'] = (string) $model->getId();
+				}
+				if ( method_exists( $result, 'getProviderMetadata' ) && ( $provider = $result->getProviderMetadata() ) ) {
+					$entry['provider'] = (string) $provider->getId();
+				}
+			} catch ( \Throwable $e ) {
+				// Usage is informational only.
+			}
+		}
+		self::$usage[] = $entry;
 	}
 
 	public static function parse_json( $text ) {

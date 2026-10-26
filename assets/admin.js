@@ -54,6 +54,9 @@
 	};
 
 	const Icon = ( { name, className } ) => h( 'span', { className: 'dashicons dashicons-' + name + ( className ? ' ' + className : '' ), 'aria-hidden': true } );
+	// Brand icons from assets/icons, tinted with currentColor via CSS mask.
+	const Svg = ( { name, className } ) =>
+		h( 'span', { className: 'tai-ico' + ( className ? ' ' + className : '' ), style: { '--tai-ico': 'url(' + cfg.iconsUrl + name + '.svg)' }, 'aria-hidden': true } );
 
 	/* ------------------------------------------------------------------ *
 	 * Building blocks
@@ -91,7 +94,7 @@
 						onClick: () => onChange( o.value ),
 						title: o.disabledReason || undefined,
 					},
-					h( Icon, { name: o.icon, className: 'tai-tile__icon' } ),
+					h( Svg, { name: o.icon, className: 'tai-tile__icon' } ),
 					h( 'span', { className: 'tai-tile__label' }, o.label ),
 					o.hint ? h( 'span', { className: 'tai-tile__hint' }, o.hint ) : null
 				)
@@ -112,8 +115,11 @@
 				h(
 					'p',
 					{ className: 'tai-help' },
-					/* translators: %d: word count. */
-					sprintf( __( 'About %d words.', TD ), ( cfg.lengths.find( ( l ) => l.value === value ) || {} ).words || 0 )
+					value === 'auto'
+						/* translators: %d: word count. */
+						? sprintf( __( 'About %d words — the average of your reference articles.', TD ), ( cfg.lengths.find( ( l ) => l.value === value ) || {} ).words || 0 )
+						/* translators: %d: word count. */
+						: sprintf( __( 'About %d words.', TD ), ( cfg.lengths.find( ( l ) => l.value === value ) || {} ).words || 0 )
 				)
 			);
 		}
@@ -121,7 +127,7 @@
 			value,
 			onChange,
 			label: __( 'Length', TD ),
-			options: cfg.lengths.map( ( l ) => ( { value: l.value, label: l.label, icon: 'editor-alignleft', hint: '~' + l.words } ) ),
+			options: cfg.lengths.map( ( l ) => ( { value: l.value, label: l.label, icon: 'pages', hint: '~' + l.words } ) ),
 		} );
 	}
 
@@ -147,7 +153,7 @@
 			{ className: 'tai-dropzone' + ( preview ? ' has-image' : '' ) },
 			preview
 				? h( 'img', { src: preview, alt: '' } )
-				: h( Icon, { name: 'format-image', className: 'tai-dropzone__icon' } ),
+				: h( Svg, { name: 'upload', className: 'tai-dropzone__icon' } ),
 			h(
 				'div',
 				{ className: 'tai-dropzone__text' },
@@ -213,6 +219,171 @@
 	}
 
 	/* ------------------------------------------------------------------ *
+	 * Estimate (tokens, cost, time) - defaults first, then learned from real generations
+	 * ------------------------------------------------------------------ */
+
+	const CHARS_PER_TOKEN = 3.6;
+	const STEP_OVERHEAD = 1.5; // Seconds to hand a step to the next background request.
+
+	function estimate( form, words ) {
+		const e = cfg.estimate;
+		const st = e.stages || {};
+		const tok = ( chars ) => chars / CHARS_PER_TOKEN;
+		const get = ( stage, key, fallback ) => ( st[ stage ] && st[ stage ][ key ] ) || fallback;
+		const system = 500 + e.brandChars;
+		const extra = ( form.instructions || '' ).length;
+		const style = get( 'analyze', 'out', 450 ) * CHARS_PER_TOKEN; // The style guide is pasted into later prompts.
+		const steps = [];
+
+		const cached = ! e.hasRefs || ( e.styleCached && ! form.refresh_style );
+		steps.push(
+			cached
+				? { key: 'analyze', label: __( 'Tone of voice', TD ), in: 0, out: 0, sec: get( 'analyze', 'sec_cached', 1 ), note: e.hasRefs ? __( 'saved profile', TD ) : __( 'no reference articles', TD ) }
+				: { key: 'analyze', label: __( 'Tone of voice', TD ), in: tok( system + 1400 + e.refChars ), out: get( 'analyze', 'out', 450 ), sec: get( 'analyze', 'sec', 12 ) }
+		);
+		steps.push( {
+			key: 'plan',
+			label: __( 'Plan', TD ),
+			in: tok( system + 2600 + style + extra + ( form.category ? 0 : e.catChars ) ),
+			out: get( 'plan', 'out', 800 ),
+			sec: get( 'plan', 'sec', 10 ),
+		} );
+
+		const links = { ai: e.linkChars, selected: form.link_ids.length * 80, none: 0 }[ form.links_mode ] || 0;
+		const writeOut = get( 'write', 'out_per_word', 0 ) ? st.write.out_per_word * words : words * ( e.english ? 1.35 : 1.9 ) * 1.15 + ( e.faq ? 350 : 0 );
+		steps.push( {
+			key: 'write',
+			label: __( 'Writing', TD ),
+			in: tok( system + 3800 + style + 1400 + links + extra ),
+			out: writeOut,
+			sec: get( 'write', 'sec_per_out', 0 ) ? writeOut * st.write.sec_per_out : 6 + writeOut / 55,
+		} );
+
+		if ( form.image_mode === 'generate' ) {
+			steps.push( { key: 'image', label: __( 'AI image', TD ), in: 0, out: 0, images: 1, sec: get( 'image', 'sec', 30 ) } );
+		} else if ( form.image_mode === 'upload' ) {
+			steps.push( { key: 'image', label: __( 'Image to WebP', TD ), in: 0, out: 0, sec: get( 'image', 'sec_upload', 3 ) } );
+		}
+		steps.push( { key: 'create', label: __( 'Draft', TD ), in: 0, out: 0, sec: get( 'create', 'sec', 2 ) } );
+		if ( form.copy_acf && cfg.acf.active ) {
+			steps.push( { key: 'acf', label: __( 'ACF', TD ), in: 0, out: 0, sec: get( 'acf', 'sec', 1 ) } );
+		}
+		steps.push( { key: 'seo', label: __( 'SEO', TD ), in: 0, out: 0, sec: get( 'seo', 'sec', 2 ) } );
+
+		const tp = e.textPrice;
+		const ip = e.imagePrice;
+		let cost = 0;
+		let costKnown = true;
+		steps.forEach( ( step ) => {
+			step.sec += STEP_OVERHEAD;
+			step.tokens = Math.round( step.in + step.out );
+			if ( step.tokens ) {
+				if ( tp ) {
+					cost += ( step.in * tp.in + step.out * tp.out ) / 1e6;
+				} else {
+					costKnown = false;
+				}
+			}
+			if ( step.images ) {
+				if ( ip ) {
+					cost += step.images * ip.per;
+				} else {
+					costKnown = false;
+				}
+			}
+		} );
+
+		return {
+			steps,
+			tokens: steps.reduce( ( sum, s ) => sum + s.tokens, 0 ),
+			seconds: steps.reduce( ( sum, s ) => sum + s.sec, 0 ),
+			cost: costKnown ? cost : null,
+			partialCost: ! costKnown && cost > 0 ? cost : null,
+		};
+	}
+
+	const fmtTokens = ( n ) => ( n >= 1000 ? ( Math.round( n / 100 ) / 10 ).toLocaleString() + 'k' : String( Math.round( n ) ) );
+	const fmtTime = ( sec ) => {
+		const s = Math.max( 1, Math.round( sec ) );
+		if ( s < 60 ) {
+			/* translators: %d: seconds. */
+			return sprintf( __( '%d s', TD ), s );
+		}
+		const m = Math.floor( s / 60 );
+		const r = s % 60;
+		/* translators: 1: minutes, 2: seconds. */
+		return r ? sprintf( __( '%1$d min %2$d s', TD ), m, r ) : sprintf( /* translators: %d: minutes. */ __( '%d min', TD ), m );
+	};
+	const fmtCost = ( usd ) => {
+		if ( usd === null || usd === undefined ) {
+			return '—';
+		}
+		if ( usd < 0.01 ) {
+			return '< $0.01';
+		}
+		return '$' + usd.toFixed( usd < 1 ? 3 : 2 );
+	};
+
+	function Estimate( { form, words } ) {
+		const [ open, setOpen ] = useState( false );
+		const est = estimate( form, words );
+		const e = cfg.estimate;
+
+		let note;
+		if ( e.jobs ) {
+			/* translators: %d: number of generations. */
+			note = sprintf( _n( 'Learned from your last generation', 'Learned from your last %d generations', e.jobs, TD ), e.jobs );
+		} else {
+			note = __( 'Rough estimate — gets more accurate after your first generation', TD );
+		}
+		let costNote = '';
+		if ( est.cost === null ) {
+			costNote = e.textModel
+				/* translators: %s: model id. */
+				? sprintf( __( 'No price known for %s — add one in Settings.', TD ), e.textModel )
+				: __( 'Cost appears once the first article shows which model your connector uses (or set prices in Settings).', TD );
+		}
+
+		return h(
+			'div',
+			{ className: 'tai-estimate' },
+			h(
+				'div',
+				{ className: 'tai-estimate__stats' },
+				h( 'div', null, h( 'span', null, __( 'Tokens', TD ) ), h( 'strong', null, '≈ ' + fmtTokens( est.tokens ) ) ),
+				h( 'div', null, h( 'span', null, __( 'Cost', TD ) ), h( 'strong', null, est.cost === null ? '—' : '≈ ' + fmtCost( est.cost ) ) ),
+				h( 'div', null, h( 'span', null, __( 'Time', TD ) ), h( 'strong', null, '≈ ' + fmtTime( est.seconds ) ) )
+			),
+			h(
+				'p',
+				{ className: 'tai-estimate__note' },
+				note,
+				e.textModel ? ' · ' + e.textModel : '',
+				' · ',
+				h( 'button', { type: 'button', className: 'tai-linkbtn', onClick: () => setOpen( ! open ), 'aria-expanded': open }, open ? __( 'Hide breakdown', TD ) : __( 'Breakdown', TD ) )
+			),
+			costNote ? h( 'p', { className: 'tai-estimate__note' }, costNote ) : null,
+			open
+				? h(
+					'table',
+					{ className: 'tai-estimate__table' },
+					h( 'tbody', null,
+						est.steps.map( ( step ) =>
+							h(
+								'tr',
+								{ key: step.key },
+								h( 'th', null, step.label, step.note ? h( 'small', null, ' (' + step.note + ')' ) : null ),
+								h( 'td', null, step.images ? __( '1 image', TD ) : step.tokens ? fmtTokens( step.tokens ) : '—' ),
+								h( 'td', null, fmtTime( step.sec ) )
+							)
+						)
+					)
+				)
+				: null
+		);
+	}
+
+	/* ------------------------------------------------------------------ *
 	 * Connection
 	 * ------------------------------------------------------------------ */
 
@@ -256,7 +427,6 @@
 		return h(
 			'div',
 			{ className: 'tai-connect' },
-			h( 'div', { className: 'tai-connect__art' }, h( Icon, { name: missing ? 'wordpress' : 'admin-plugins' } ) ),
 			h( 'h2', null, missing ? __( 'WordPress 7.0 or newer is required', TD ) : __( 'Connect an AI provider to get started', TD ) ),
 			h( 'p', null, ( status && status.message ) || __( 'AI Articles uses the AI connector configured in WordPress (OpenAI, Anthropic, Google…).', TD ) ),
 			! missing
@@ -343,7 +513,13 @@
 						h( 'dt', null, __( 'Words', TD ) ),
 						h( 'dd', null, String( job.result.word_count ) ),
 						h( 'dt', null, __( 'SEO', TD ) ),
-						h( 'dd', null, job.result.seo_plugin || __( 'Built-in (no SEO plugin)', TD ) )
+						h( 'dd', null, job.result.seo_plugin || __( 'Built-in (no SEO plugin)', TD ) ),
+						job.result.usage && job.result.usage.tokens
+							? h( Fragment, null,
+								h( 'dt', null, __( 'Used', TD ) ),
+								h( 'dd', null, [ fmtTokens( job.result.usage.tokens ) + ' ' + __( 'tokens', TD ), job.result.usage.cost !== null ? fmtCost( job.result.usage.cost ) : null, job.result.usage.seconds ? fmtTime( job.result.usage.seconds ) : null ].filter( Boolean ).join( ' · ' ) )
+							)
+							: null
 					)
 				)
 				: null,
@@ -415,7 +591,7 @@
 		const form = {
 			title: '',
 			keyword: '',
-			length: 'medium',
+			length: cfg.lengths.some( ( l ) => l.value === 'auto' ) ? 'auto' : 'medium',
 			category: 0,
 			cta: cfg.defaultCta || 0,
 			links_mode: 'ai',
@@ -428,6 +604,9 @@
 			refresh_style: false,
 			...prefs,
 		};
+		if ( ! cfg.lengths.some( ( l ) => l.value === form.length ) ) {
+			form.length = 'medium';
+		}
 		if ( ! cfg.pages.some( ( p ) => p.id === form.cta ) ) {
 			form.cta = cfg.defaultCta || 0;
 		}
@@ -440,6 +619,73 @@
 		return form;
 	};
 
+	/**
+	 * Emoji mood: a resting face from the form state, plus short reactions when something changes.
+	 */
+	const REACTIONS = {
+		length: { auto: 'smize', short: 'tongue', medium: 'smile', long: 'taking' },
+		links_mode: { ai: 'nitpicking', selected: 'firm', none: 'speechless' },
+		image_mode: { generate: 'crush', upload: 'dazzling', none: 'sorrow' },
+	};
+
+	function useMood( form, extra ) {
+		const [ reaction, setReaction ] = useState( null );
+		const prev = useRef( form );
+		const timer = useRef();
+		const react = ( face, ms = 2600 ) => {
+			clearTimeout( timer.current );
+			setReaction( face );
+			timer.current = setTimeout( () => setReaction( null ), ms );
+		};
+
+		useEffect( () => {
+			const before = prev.current;
+			prev.current = form;
+			let face = null;
+			Object.keys( REACTIONS ).forEach( ( key ) => {
+				if ( before[ key ] !== form[ key ] ) {
+					face = REACTIONS[ key ][ form[ key ] ] || face;
+				}
+			} );
+			if ( before.cta !== form.cta ) {
+				face = form.cta ? 'wink' : 'sour';
+			}
+			if ( before.category !== form.category ) {
+				face = form.category ? 'firm' : 'nitpicking';
+			}
+			if ( before.copy_acf !== form.copy_acf ) {
+				face = form.copy_acf ? 'wink' : 'graveyard';
+			}
+			if ( before.link_ids.length !== form.link_ids.length ) {
+				face = form.link_ids.length > before.link_ids.length ? 'smile' : 'speechless';
+			}
+			if ( before.attachment_id !== form.attachment_id ) {
+				face = form.attachment_id ? 'crush' : 'sorrow';
+			}
+			if ( before.title !== form.title ) {
+				face = form.title.length > 60 ? 'dumbfounded' : 'dazzling';
+			}
+			if ( before.keyword !== form.keyword || before.instructions !== form.instructions ) {
+				face = 'smize';
+			}
+			if ( face ) {
+				react( face, before.title !== form.title ? 1200 : 2600 );
+			}
+		}, [ form ] );
+
+		useEffect( () => {
+			if ( extra.event ) {
+				react( extra.event, 3500 );
+			}
+		}, [ extra.event, extra.eventId ] );
+
+		let rest = form.title.trim() ? 'smile' : 'blankly';
+		if ( extra.submitting ) {
+			rest = 'laughing';
+		}
+		return extra.submitting ? 'laughing' : reaction || rest;
+	}
+
 	function App() {
 		const { status, checking, check } = useStatus();
 		const [ form, setForm ] = useState( blankForm );
@@ -447,7 +693,11 @@
 		const [ error, setError ] = useState( null );
 		const [ started, setStarted ] = useState( null );
 		const [ showMore, setShowMore ] = useState( false );
+		const [ event, setEvent ] = useState( { event: null, eventId: 0 } );
 		const titleRef = useRef();
+		const mood = useMood( form, { submitting, ...event } );
+		const emote = ( face ) => setEvent( ( e ) => ( { event: face, eventId: e.eventId + 1 } ) );
+		const Emoji = window.taiEmoji;
 
 		const set = ( key ) => ( value ) => setForm( ( f ) => ( { ...f, [ key ]: value } ) );
 		const imageGen = !! ( status && status.image );
@@ -460,7 +710,12 @@
 		}, [ status ] );
 
 		if ( cfg.clientMissing || ( status && ! status.text ) ) {
-			return h( 'div', { className: 'tai-app' }, h( 'div', { className: 'tai-topbar' }, h( ConnectionPill, { status, checking } ) ), h( ConnectState, { status, checking, onCheck: check } ) );
+			return h(
+				'div',
+				{ className: 'tai-app' },
+				h( 'div', { className: 'tai-topbar' }, h( ConnectionPill, { status, checking } ) ),
+				h( 'div', { className: 'tai-connect-wrap' }, Emoji ? h( Emoji, { mood: checking ? 'dumbfounded' : 'die', size: 96 } ) : null, h( ConnectState, { status, checking, onCheck: check } ) )
+			);
 		}
 
 		const missing = [];
@@ -491,12 +746,16 @@
 						window.taiJobs.upsert( job );
 					}
 					setStarted( job );
+					emote( 'crush' );
 					setForm( ( f ) => ( { ...blankForm(), cta: f.cta, length: f.length, links_mode: f.links_mode, image_mode: f.image_mode, category: 0 } ) );
 					if ( titleRef.current ) {
 						titleRef.current.focus();
 					}
 				} )
-				.catch( ( err ) => setError( err.message || __( 'Could not start the generation.', TD ) ) )
+				.catch( ( err ) => {
+					setError( err.message || __( 'Could not start the generation.', TD ) );
+					emote( 'frightened' );
+				} )
 				.finally( () => setSubmitting( false ) );
 		};
 
@@ -505,15 +764,15 @@
 		const length = cfg.lengths.find( ( l ) => l.value === form.length ) || {};
 
 		const summary = [
-			[ 'editor-alignleft', sprintf( /* translators: 1: length label, 2: words. */ __( '%1$s · ~%2$d words', TD ), length.label, length.words ) ],
+			[ 'pages', sprintf( /* translators: 1: length label, 2: words. */ __( '%1$s · ~%2$d words', TD ), length.label, length.words ) ],
 			[ 'category', category ? category.name : __( 'AI picks the category', TD ) ],
-			[ 'megaphone', cta ? sprintf( /* translators: %s: page title. */ __( 'CTA → %s', TD ), cta.title ) : __( 'No CTA', TD ) ],
-			[ 'admin-links', { none: __( 'No internal links', TD ), ai: __( 'AI adds internal links', TD ), selected: sprintf( /* translators: %d: pages. */ __( 'Links to %d chosen pages', TD ), form.link_ids.length ) }[ form.links_mode ] ],
-			[ 'format-image', { generate: __( 'AI image (WebP 80%)', TD ), upload: __( 'Your image (WebP 80%)', TD ), none: __( 'No featured image', TD ) }[ form.image_mode ] ],
-			cfg.seo ? [ 'chart-line', sprintf( /* translators: %s: plugin. */ __( 'SEO via %s', TD ), cfg.seo.name ) ] : [ 'warning', __( 'No SEO plugin — built-in meta & schema', TD ) ],
+			[ 'cta', cta ? sprintf( /* translators: %s: page title. */ __( 'CTA → %s', TD ), cta.title ) : __( 'No CTA', TD ) ],
+			[ 'links', { none: __( 'No internal links', TD ), ai: __( 'AI adds internal links', TD ), selected: sprintf( /* translators: %d: pages. */ __( 'Links to %d chosen pages', TD ), form.link_ids.length ) }[ form.links_mode ] ],
+			[ 'image', { generate: __( 'AI image (WebP 80%)', TD ), upload: __( 'Your image (WebP 80%)', TD ), none: __( 'No featured image', TD ) }[ form.image_mode ] ],
+			cfg.seo ? [ 'seo', sprintf( /* translators: %s: plugin. */ __( 'SEO via %s', TD ), cfg.seo.name ) ] : [ 'seo', __( 'No SEO plugin — built-in meta & schema', TD ) ],
 		];
 		if ( form.copy_acf && cfg.acf.active ) {
-			summary.push( [ 'admin-page', __( 'Copies ACF from last article', TD ) ] );
+			summary.push( [ 'acf', __( 'Copies ACF from last article', TD ) ] );
 		}
 
 		return h(
@@ -535,7 +794,7 @@
 
 					h(
 						Step,
-						{ n: 1, title: __( 'Topic', TD ), help: sprintf( /* translators: %d: articles. */ __( 'Written in the tone of voice of your latest %d articles.', TD ), cfg.scanCount ) },
+						{ n: 1, title: __( 'Topic', TD ), help: sprintf( /* translators: %d: articles. */ __( 'Written in the tone of voice of your first %d articles.', TD ), cfg.scanCount ) },
 						h(
 							'div',
 							{ className: 'tai-title-input' },
@@ -592,9 +851,9 @@
 							value: form.links_mode,
 							onChange: set( 'links_mode' ),
 							options: [
-								{ value: 'ai', icon: 'lightbulb', label: __( 'Let AI decide', TD ), hint: __( 'From your published content', TD ) },
-								{ value: 'selected', icon: 'list-view', label: __( 'Pages I choose', TD ), hint: __( 'Linked where relevant', TD ) },
-								{ value: 'none', icon: 'dismiss', label: __( 'None', TD ), hint: __( 'Only the CTA', TD ) },
+								{ value: 'ai', icon: 'ai-decides', label: __( 'Let AI decide', TD ), hint: __( 'From your published content', TD ) },
+								{ value: 'selected', icon: 'pages', label: __( 'Pages I choose', TD ), hint: __( 'Linked where relevant', TD ) },
+								{ value: 'none', icon: 'none', label: __( 'None', TD ), hint: __( 'Only the CTA', TD ) },
 							],
 						} ),
 						form.links_mode === 'selected' ? h( LinkPicker, { selected: form.link_ids, onChange: set( 'link_ids' ) } ) : null
@@ -611,14 +870,14 @@
 								options: [
 									{
 										value: 'generate',
-										icon: 'art',
+										icon: 'ai-image',
 										label: __( 'Generate with AI', TD ),
 										hint: imageGen ? __( 'Matches the article', TD ) : __( 'Not supported by your provider', TD ),
 										disabled: ! imageGen,
 										disabledReason: imageGen ? '' : __( 'Your connected provider cannot generate images. Connect OpenAI or Google in Settings → Connectors.', TD ),
 									},
 									{ value: 'upload', icon: 'upload', label: __( 'Upload / Media Library', TD ), hint: __( 'Use your own photo', TD ) },
-									{ value: 'none', icon: 'hidden', label: __( 'No image', TD ), hint: __( 'Add one later', TD ) },
+									{ value: 'none', icon: 'no-image', label: __( 'No image', TD ), hint: __( 'Add one later', TD ) },
 								],
 							} )
 							: h( Notice, { status: 'info', isDismissible: false }, __( 'You do not have permission to upload images.', TD ) ),
@@ -687,8 +946,9 @@
 					h(
 						'section',
 						{ className: 'tai-card tai-summary' },
+						Emoji ? h( 'div', { className: 'tai-summary__emoji' }, h( Emoji, { mood, label: __( 'Mood of the article assistant', TD ) } ) ) : null,
 						h( 'h2', null, __( 'Summary', TD ) ),
-						h( 'ul', null, summary.map( ( [ icon, text ], i ) => h( 'li', { key: i }, h( Icon, { name: icon } ), h( 'span', null, text ) ) ) ),
+						h( 'ul', null, summary.map( ( [ icon, text ], i ) => h( 'li', { key: i }, h( Svg, { name: icon } ), h( 'span', null, text ) ) ) ),
 						started
 							? h(
 								Notice,
@@ -697,10 +957,10 @@
 								sprintf( __( '“%s” is being written. We’ll notify you when the draft is ready — you can leave this page.', TD ), started.title )
 							)
 							: null,
+						h( Estimate, { form, words: length.words || 1300 } ),
 						h(
 							Button,
 							{ variant: 'primary', className: 'tai-generate', onClick: submit, disabled: ! ready, isBusy: submitting, __next40pxDefaultSize: true },
-							h( Icon, { name: 'superhero-alt' } ),
 							submitting ? __( 'Starting…', TD ) : __( 'Generate draft', TD )
 						),
 						missing.length && form.title ? h( 'ul', { className: 'tai-missing' }, missing.map( ( m, i ) => h( 'li', { key: i }, m ) ) ) : null,
