@@ -2,7 +2,7 @@
 Requires at least: 6.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.0.0
+Stable tag: 1.1.0
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -72,6 +72,14 @@ Installed sites see new versions on Dashboard → Updates and the Plugins screen
 3. The "Release" GitHub Action checks the versions match, builds `twenty-ai-articles.zip` and publishes the GitHub release with generated notes. Edit the release notes on GitHub if you like; they appear as the changelog in WordPress.
 
 == Changelog ==
+
+= 1.1.0 =
+* Estimated tokens, cost and time before generating (learns from your own generations); actual usage on finished jobs.
+* New "As other articles" length option.
+* Tone of voice is learned from the first published articles; AI-generated articles are never used as reference.
+* Animated assistant emoji, new icons and 20twenty brand colours.
+* Completion notifications at the top of every admin screen and inside the block editor.
+* "Key takeaways" is now off by default; ACF summary field setting removed.
 
 = 1.0.0 =
 * Initial release.

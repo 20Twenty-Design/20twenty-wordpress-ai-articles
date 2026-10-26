@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       20twenty AI Articles
  * Description:       Generate complete, SEO-ready draft articles (Gutenberg blocks, featured WebP image, excerpt, category, SEO meta and schema) using the WordPress AI Client and whichever AI connector is configured (OpenAI, Anthropic, Google…).
- * Version:           1.0.0
+ * Version:           1.1.0
  * Requires at least: 6.6
  * Requires PHP:      7.4
  * Author:            20twenty
@@ -15,7 +15,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'TAI_VERSION', '1.0.0' );
+define( 'TAI_VERSION', '1.1.0' );
 define( 'TAI_FILE', __FILE__ );
 define( 'TAI_DIR', plugin_dir_path( __FILE__ ) );
 define( 'TAI_URL', plugin_dir_url( __FILE__ ) );
