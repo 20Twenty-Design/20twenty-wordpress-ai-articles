@@ -1,0 +1,10 @@
+.git
+.github
+.gitignore
+.gitattributes
+.distignore
+bin
+build
+node_modules
+README.md
+.DS_Store

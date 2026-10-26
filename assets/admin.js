@@ -1,0 +1,720 @@
+/* global wp, taiData */
+( function ( wp, cfg ) {
+	'use strict';
+
+	const mount = document.getElementById( 'tai-app' );
+	if ( ! cfg || ! mount ) {
+		return;
+	}
+
+	const { createElement: h, useState, useEffect, useMemo, useRef, Fragment } = wp.element;
+	const C = wp.components;
+	const { Button, TextControl, TextareaControl, SelectControl, CheckboxControl, Notice, Spinner } = C;
+	const ToggleGroup = C.ToggleGroupControl || C.__experimentalToggleGroupControl;
+	const ToggleOption = C.ToggleGroupControlOption || C.__experimentalToggleGroupControlOption;
+	const { __, sprintf, _n } = wp.i18n;
+	const apiFetch = wp.apiFetch;
+	const TD = 'twenty-ai-articles';
+	const PREFS_KEY = 'tai-prefs-' + cfg.postType;
+	const field = { __nextHasNoMarginBottom: true, __next40pxDefaultSize: true };
+
+	/* ------------------------------------------------------------------ *
+	 * Helpers
+	 * ------------------------------------------------------------------ */
+
+	const loadPrefs = () => {
+		try {
+			return JSON.parse( window.localStorage.getItem( PREFS_KEY ) ) || {};
+		} catch ( e ) {
+			return {};
+		}
+	};
+	const savePrefs = ( form ) => {
+		try {
+			const { length, cta, links_mode, image_mode, copy_acf } = form;
+			window.localStorage.setItem( PREFS_KEY, JSON.stringify( { length, cta, links_mode, image_mode, copy_acf } ) );
+		} catch ( e ) {}
+	};
+
+	const timeAgo = ( ts ) => {
+		const s = Math.max( 0, Math.floor( Date.now() / 1000 - ts ) );
+		if ( s < 60 ) {
+			return __( 'just now', TD );
+		}
+		if ( s < 3600 ) {
+			/* translators: %d: minutes. */
+			return sprintf( _n( '%d min ago', '%d min ago', Math.floor( s / 60 ), TD ), Math.floor( s / 60 ) );
+		}
+		if ( s < 86400 ) {
+			/* translators: %d: hours. */
+			return sprintf( _n( '%d hour ago', '%d hours ago', Math.floor( s / 3600 ), TD ), Math.floor( s / 3600 ) );
+		}
+		/* translators: %d: days. */
+		return sprintf( _n( '%d day ago', '%d days ago', Math.floor( s / 86400 ), TD ), Math.floor( s / 86400 ) );
+	};
+
+	const Icon = ( { name, className } ) => h( 'span', { className: 'dashicons dashicons-' + name + ( className ? ' ' + className : '' ), 'aria-hidden': true } );
+
+	/* ------------------------------------------------------------------ *
+	 * Building blocks
+	 * ------------------------------------------------------------------ */
+
+	function Step( { n, title, help, children, aside } ) {
+		return h(
+			'section',
+			{ className: 'tai-card' },
+			h(
+				'header',
+				{ className: 'tai-card__head' },
+				h( 'span', { className: 'tai-card__num' }, n ),
+				h( 'div', { className: 'tai-card__titles' }, h( 'h2', null, title ), help ? h( 'p', null, help ) : null ),
+				aside || null
+			),
+			h( 'div', { className: 'tai-card__body' }, children )
+		);
+	}
+
+	function Tiles( { value, onChange, options, label } ) {
+		return h(
+			'div',
+			{ className: 'tai-tiles', role: 'radiogroup', 'aria-label': label },
+			options.map( ( o ) =>
+				h(
+					'button',
+					{
+						key: o.value,
+						type: 'button',
+						role: 'radio',
+						'aria-checked': value === o.value,
+						disabled: !! o.disabled,
+						className: 'tai-tile' + ( value === o.value ? ' is-selected' : '' ),
+						onClick: () => onChange( o.value ),
+						title: o.disabledReason || undefined,
+					},
+					h( Icon, { name: o.icon, className: 'tai-tile__icon' } ),
+					h( 'span', { className: 'tai-tile__label' }, o.label ),
+					o.hint ? h( 'span', { className: 'tai-tile__hint' }, o.hint ) : null
+				)
+			)
+		);
+	}
+
+	function LengthControl( { value, onChange } ) {
+		if ( ToggleGroup && ToggleOption ) {
+			return h(
+				'div',
+				null,
+				h(
+					ToggleGroup,
+					{ ...field, label: __( 'Length', TD ), value, isBlock: true, onChange },
+					cfg.lengths.map( ( l ) => h( ToggleOption, { key: l.value, value: l.value, label: l.label } ) )
+				),
+				h(
+					'p',
+					{ className: 'tai-help' },
+					/* translators: %d: word count. */
+					sprintf( __( 'About %d words.', TD ), ( cfg.lengths.find( ( l ) => l.value === value ) || {} ).words || 0 )
+				)
+			);
+		}
+		return h( Tiles, {
+			value,
+			onChange,
+			label: __( 'Length', TD ),
+			options: cfg.lengths.map( ( l ) => ( { value: l.value, label: l.label, icon: 'editor-alignleft', hint: '~' + l.words } ) ),
+		} );
+	}
+
+	function ImagePicker( { value, onChange } ) {
+		const [ preview, setPreview ] = useState( null );
+		const open = () => {
+			const frame = wp.media( {
+				title: __( 'Select featured image', TD ),
+				library: { type: 'image' },
+				multiple: false,
+				button: { text: __( 'Use this image', TD ) },
+			} );
+			frame.on( 'select', () => {
+				const a = frame.state().get( 'selection' ).first().toJSON();
+				onChange( a.id );
+				setPreview( a.sizes && a.sizes.medium ? a.sizes.medium.url : a.url );
+			} );
+			frame.open();
+		};
+
+		return h(
+			'div',
+			{ className: 'tai-dropzone' + ( preview ? ' has-image' : '' ) },
+			preview
+				? h( 'img', { src: preview, alt: '' } )
+				: h( Icon, { name: 'format-image', className: 'tai-dropzone__icon' } ),
+			h(
+				'div',
+				{ className: 'tai-dropzone__text' },
+				h( 'strong', null, preview ? __( 'Image selected', TD ) : __( 'Upload or choose an image', TD ) ),
+				h( 'span', null, __( 'Saved as a WebP copy (80% quality) with AI-written alt text. Your original stays untouched.', TD ) ),
+				h(
+					'div',
+					{ className: 'tai-row' },
+					h( Button, { variant: 'secondary', onClick: open }, value ? __( 'Replace', TD ) : __( 'Open Media Library', TD ) ),
+					value ? h( Button, { variant: 'tertiary', isDestructive: true, onClick: () => { onChange( 0 ); setPreview( null ); } }, __( 'Remove', TD ) ) : null
+				)
+			)
+		);
+	}
+
+	function LinkPicker( { selected, onChange } ) {
+		const [ query, setQuery ] = useState( '' );
+		const byId = useMemo( () => new Map( cfg.linkTargets.map( ( t ) => [ t.id, t ] ) ), [] );
+		const items = useMemo( () => {
+			const q = query.trim().toLowerCase();
+			return cfg.linkTargets.filter( ( t ) => ! q || t.title.toLowerCase().includes( q ) ).slice( 0, 80 );
+		}, [ query ] );
+		const toggle = ( id ) => onChange( selected.includes( id ) ? selected.filter( ( x ) => x !== id ) : [ ...selected, id ] );
+
+		return h(
+			'div',
+			{ className: 'tai-links' },
+			selected.length
+				? h(
+					'div',
+					{ className: 'tai-chips' },
+					selected.map( ( id ) =>
+						h(
+							'span',
+							{ key: id, className: 'tai-chip' },
+							( byId.get( id ) || {} ).title || '#' + id,
+							h( 'button', { type: 'button', 'aria-label': __( 'Remove', TD ), onClick: () => toggle( id ) }, '×' )
+						)
+					)
+				)
+				: null,
+			h( TextControl, { ...field, label: __( 'Find pages and articles', TD ), hideLabelFromVision: true, placeholder: __( 'Search pages and articles…', TD ), value: query, onChange: setQuery } ),
+			h(
+				'ul',
+				{ className: 'tai-links__list' },
+				items.length
+					? items.map( ( t ) =>
+						h(
+							'li',
+							{ key: t.id },
+							h(
+								'button',
+								{ type: 'button', className: selected.includes( t.id ) ? 'is-selected' : '', onClick: () => toggle( t.id ) },
+								h( Icon, { name: selected.includes( t.id ) ? 'yes' : 'plus-alt2' } ),
+								h( 'span', { className: 'tai-links__title' }, t.title ),
+								h( 'span', { className: 'tai-links__type' }, t.type )
+							)
+						)
+					)
+					: h( 'li', { className: 'tai-links__empty' }, __( 'No matches.', TD ) )
+			)
+		);
+	}
+
+	/* ------------------------------------------------------------------ *
+	 * Connection
+	 * ------------------------------------------------------------------ */
+
+	function useStatus() {
+		const [ status, setStatus ] = useState( cfg.clientMissing ? { available: false, text: false, image: false, providers: [], message: '' } : cfg.status );
+		const [ checking, setChecking ] = useState( ! status );
+		const check = ( refresh ) => {
+			setChecking( true );
+			return apiFetch( { path: '/tai/v1/status' + ( refresh ? '?refresh=1' : '' ) } )
+				.then( setStatus )
+				.catch( () => setStatus( { available: true, text: false, image: false, providers: [], message: __( 'Could not check the AI connection.', TD ) } ) )
+				.finally( () => setChecking( false ) );
+		};
+		useEffect( () => {
+			if ( ! status ) {
+				check( false );
+			}
+		}, [] );
+		return { status, checking, check };
+	}
+
+	function ConnectionPill( { status, checking } ) {
+		if ( checking && ! status ) {
+			return h( 'span', { className: 'tai-pill is-checking' }, h( Spinner ), __( 'Checking AI connection…', TD ) );
+		}
+		if ( ! status || ! status.text ) {
+			return h( 'span', { className: 'tai-pill is-off' }, h( 'i' ), __( 'AI not connected', TD ) );
+		}
+		const providers = status.providers.length ? status.providers.join( ', ' ) : __( 'AI', TD );
+		return h(
+			'span',
+			{ className: 'tai-pill is-on', title: status.image ? __( 'Text and image generation available', TD ) : __( 'Text generation available; image generation is not', TD ) },
+			h( 'i' ),
+			/* translators: %s: provider names. */
+			sprintf( __( '%s connected', TD ), providers )
+		);
+	}
+
+	function ConnectState( { status, checking, onCheck } ) {
+		const missing = cfg.clientMissing;
+		return h(
+			'div',
+			{ className: 'tai-connect' },
+			h( 'div', { className: 'tai-connect__art' }, h( Icon, { name: missing ? 'wordpress' : 'admin-plugins' } ) ),
+			h( 'h2', null, missing ? __( 'WordPress 7.0 or newer is required', TD ) : __( 'Connect an AI provider to get started', TD ) ),
+			h( 'p', null, ( status && status.message ) || __( 'AI Articles uses the AI connector configured in WordPress (OpenAI, Anthropic, Google…).', TD ) ),
+			! missing
+				? h(
+					'ol',
+					{ className: 'tai-connect__steps' },
+					h( 'li', null, __( 'Open Settings → Connectors.', TD ) ),
+					h( 'li', null, __( 'Install a provider (OpenAI or Google also generate images; Anthropic writes text only).', TD ) ),
+					h( 'li', null, __( 'Paste your API key, save, and come back here.', TD ) )
+				)
+				: null,
+			h(
+				'div',
+				{ className: 'tai-row tai-row--center' },
+				cfg.canManage
+					? h( Button, { variant: 'primary', href: cfg.connectorsUrl, __next40pxDefaultSize: true }, missing ? __( 'Update WordPress', TD ) : __( 'Open Connectors settings', TD ) )
+					: h( 'p', null, __( 'Ask a site administrator to connect an AI provider.', TD ) ),
+				! missing ? h( Button, { variant: 'secondary', onClick: () => onCheck( true ), isBusy: checking, disabled: checking, __next40pxDefaultSize: true }, __( 'Check again', TD ) ) : null
+			)
+		);
+	}
+
+	/* ------------------------------------------------------------------ *
+	 * Jobs list
+	 * ------------------------------------------------------------------ */
+
+	function useJobs() {
+		const [ jobs, setJobs ] = useState( window.taiJobs ? window.taiJobs.getAll() : [] );
+		useEffect( () => ( window.taiJobs ? window.taiJobs.subscribe( setJobs ) : undefined ), [] );
+		return jobs;
+	}
+
+	const STATE_LABEL = {
+		queued: __( 'Queued', TD ),
+		running: __( 'Working', TD ),
+		done: __( 'Ready', TD ),
+		failed: __( 'Failed', TD ),
+		cancelled: __( 'Cancelled', TD ),
+	};
+
+	function JobCard( { job, highlight } ) {
+		const [ open, setOpen ] = useState( false );
+		const active = job.state === 'queued' || job.state === 'running';
+		const seen = () => window.taiJobs && window.taiJobs.seen( job.id );
+
+		return h(
+			'li',
+			{ className: 'tai-job is-' + job.state + ( highlight ? ' is-new' : '' ) },
+			h(
+				'div',
+				{ className: 'tai-job__top' },
+				h( 'span', { className: 'tai-job__title' }, job.title ),
+				h( 'span', { className: 'tai-status is-' + job.state }, STATE_LABEL[ job.state ] || job.state )
+			),
+			active
+				? h(
+					Fragment,
+					null,
+					h( 'div', { className: 'tai-bar' }, h( 'span', { style: { width: Math.max( 3, job.progress ) + '%' } } ) ),
+					h(
+						'div',
+						{ className: 'tai-job__label' },
+						h( Spinner ),
+						h( 'span', null, job.stalled ? __( 'Waiting for the server to pick this up…', TD ) : job.label ),
+						h( 'span', { className: 'tai-job__pct' }, job.progress + '%' )
+					),
+					job.stalled
+						? h( 'p', { className: 'tai-job__hint' }, __( 'Background requests seem slow on this server. The job resumes automatically; if it stays stuck, check Tools → Site Health for loopback or WP-Cron problems.', TD ) )
+						: null
+				)
+				: null,
+			job.state === 'failed' ? h( 'p', { className: 'tai-job__error' }, job.error ) : null,
+			job.state === 'done' && job.result
+				? h(
+					'div',
+					{ className: 'tai-job__result' },
+					job.result.image ? h( 'img', { src: job.result.image, alt: job.result.image_alt || '' } ) : null,
+					h(
+						'dl',
+						null,
+						job.result.category ? h( Fragment, null, h( 'dt', null, __( 'Category', TD ) ), h( 'dd', null, job.result.category ) ) : null,
+						h( 'dt', null, __( 'Keyword', TD ) ),
+						h( 'dd', null, job.result.focus_keyword ),
+						h( 'dt', null, __( 'Words', TD ) ),
+						h( 'dd', null, String( job.result.word_count ) ),
+						h( 'dt', null, __( 'SEO', TD ) ),
+						h( 'dd', null, job.result.seo_plugin || __( 'Built-in (no SEO plugin)', TD ) )
+					)
+				)
+				: null,
+			job.warnings && job.warnings.length && ! active
+				? h( 'ul', { className: 'tai-job__warnings' }, job.warnings.map( ( w, i ) => h( 'li', { key: i }, h( Icon, { name: 'info-outline' } ), w ) ) )
+				: null,
+			h(
+				'div',
+				{ className: 'tai-job__foot' },
+				h( 'span', { className: 'tai-job__time' }, timeAgo( job.created ) ),
+				h(
+					'div',
+					{ className: 'tai-row' },
+					job.log && job.log.length
+						? h( Button, { variant: 'tertiary', size: 'small', onClick: () => setOpen( ! open ), 'aria-expanded': open }, open ? __( 'Hide steps', TD ) : __( 'Steps', TD ) )
+						: null,
+					active ? h( Button, { variant: 'tertiary', size: 'small', isDestructive: true, onClick: () => window.taiJobs.cancel( job.id ) }, __( 'Cancel', TD ) ) : null,
+					job.state === 'failed' ? h( Button, { variant: 'secondary', size: 'small', onClick: () => window.taiJobs.retry( job.id ) }, __( 'Retry', TD ) ) : null,
+					job.state === 'done' && job.result
+						? h( Fragment, null,
+							h( Button, { variant: 'secondary', size: 'small', href: job.result.preview_url, target: '_blank', onClick: seen }, __( 'Preview', TD ) ),
+							h( Button, { variant: 'primary', size: 'small', href: job.result.edit_url, onClick: seen }, __( 'Edit draft', TD ) )
+						)
+						: null
+				)
+			),
+			open
+				? h(
+					'ol',
+					{ className: 'tai-job__log' },
+					job.log.map( ( l, i ) => h( 'li', { key: i }, h( Icon, { name: 'yes' } ), h( 'strong', null, l.label ), l.detail ? h( 'span', null, l.detail ) : null ) )
+				)
+				: null
+		);
+	}
+
+	function JobsPanel( { highlightId } ) {
+		const jobs = useJobs();
+		const [ permission, setPermission ] = useState( 'Notification' in window ? window.Notification.permission : 'unsupported' );
+		return h(
+			'section',
+			{ className: 'tai-card tai-jobs' },
+			h(
+				'header',
+				{ className: 'tai-card__head' },
+				h( 'div', { className: 'tai-card__titles' }, h( 'h2', null, __( 'Your generations', TD ) ), h( 'p', null, __( 'Runs in the background — feel free to keep working anywhere in WordPress.', TD ) ) )
+			),
+			permission === 'default'
+				? h(
+					'div',
+					{ className: 'tai-notify-optin' },
+					h( Icon, { name: 'bell' } ),
+					h( 'span', null, __( 'Get a desktop notification when a draft is ready, even in another tab.', TD ) ),
+					h( Button, { variant: 'link', onClick: () => window.taiJobs.requestPermission().then( setPermission ) }, __( 'Enable', TD ) )
+				)
+				: null,
+			jobs.length
+				? h( 'ul', { className: 'tai-jobs__list' }, jobs.map( ( job ) => h( JobCard, { key: job.id, job, highlight: job.id === highlightId } ) ) )
+				: h( 'div', { className: 'tai-empty' }, h( Icon, { name: 'welcome-write-blog' } ), h( 'p', null, __( 'No generations yet. Your drafts will appear here.', TD ) ) )
+		);
+	}
+
+	/* ------------------------------------------------------------------ *
+	 * App
+	 * ------------------------------------------------------------------ */
+
+	const blankForm = () => {
+		const prefs = loadPrefs();
+		const form = {
+			title: '',
+			keyword: '',
+			length: 'medium',
+			category: 0,
+			cta: cfg.defaultCta || 0,
+			links_mode: 'ai',
+			link_ids: [],
+			image_mode: cfg.canUpload ? 'generate' : 'none',
+			attachment_id: 0,
+			image_prompt: '',
+			copy_acf: !! cfg.acf.lastArticle,
+			instructions: '',
+			refresh_style: false,
+			...prefs,
+		};
+		if ( ! cfg.pages.some( ( p ) => p.id === form.cta ) ) {
+			form.cta = cfg.defaultCta || 0;
+		}
+		if ( ! cfg.acf.lastArticle ) {
+			form.copy_acf = false;
+		}
+		if ( form.image_mode === 'upload' ) {
+			form.image_mode = cfg.canUpload ? 'generate' : 'none'; // An attachment is never remembered.
+		}
+		return form;
+	};
+
+	function App() {
+		const { status, checking, check } = useStatus();
+		const [ form, setForm ] = useState( blankForm );
+		const [ submitting, setSubmitting ] = useState( false );
+		const [ error, setError ] = useState( null );
+		const [ started, setStarted ] = useState( null );
+		const [ showMore, setShowMore ] = useState( false );
+		const titleRef = useRef();
+
+		const set = ( key ) => ( value ) => setForm( ( f ) => ( { ...f, [ key ]: value } ) );
+		const imageGen = !! ( status && status.image );
+
+		// Fall back if the connected provider cannot generate images.
+		useEffect( () => {
+			if ( status && status.text && ! status.image && form.image_mode === 'generate' ) {
+				set( 'image_mode' )( 'upload' );
+			}
+		}, [ status ] );
+
+		if ( cfg.clientMissing || ( status && ! status.text ) ) {
+			return h( 'div', { className: 'tai-app' }, h( 'div', { className: 'tai-topbar' }, h( ConnectionPill, { status, checking } ) ), h( ConnectState, { status, checking, onCheck: check } ) );
+		}
+
+		const missing = [];
+		if ( ! form.title.trim() ) {
+			missing.push( __( 'Add a main title.', TD ) );
+		}
+		if ( form.image_mode === 'upload' && ! form.attachment_id ) {
+			missing.push( __( 'Choose an image, or pick another image option.', TD ) );
+		}
+		if ( form.links_mode === 'selected' && ! form.link_ids.length ) {
+			missing.push( __( 'Select at least one page to link to.', TD ) );
+		}
+		const ready = status && status.text && ! missing.length && ! submitting;
+
+		const submit = ( e ) => {
+			if ( e ) {
+				e.preventDefault();
+			}
+			if ( ! ready ) {
+				return;
+			}
+			setSubmitting( true );
+			setError( null );
+			apiFetch( { path: '/tai/v1/jobs', method: 'POST', data: { ...form, post_type: cfg.postType } } )
+				.then( ( job ) => {
+					savePrefs( form );
+					if ( window.taiJobs ) {
+						window.taiJobs.upsert( job );
+					}
+					setStarted( job );
+					setForm( ( f ) => ( { ...blankForm(), cta: f.cta, length: f.length, links_mode: f.links_mode, image_mode: f.image_mode, category: 0 } ) );
+					if ( titleRef.current ) {
+						titleRef.current.focus();
+					}
+				} )
+				.catch( ( err ) => setError( err.message || __( 'Could not start the generation.', TD ) ) )
+				.finally( () => setSubmitting( false ) );
+		};
+
+		const cta = cfg.pages.find( ( p ) => p.id === form.cta );
+		const category = cfg.categories.find( ( c ) => c.id === form.category );
+		const length = cfg.lengths.find( ( l ) => l.value === form.length ) || {};
+
+		const summary = [
+			[ 'editor-alignleft', sprintf( /* translators: 1: length label, 2: words. */ __( '%1$s · ~%2$d words', TD ), length.label, length.words ) ],
+			[ 'category', category ? category.name : __( 'AI picks the category', TD ) ],
+			[ 'megaphone', cta ? sprintf( /* translators: %s: page title. */ __( 'CTA → %s', TD ), cta.title ) : __( 'No CTA', TD ) ],
+			[ 'admin-links', { none: __( 'No internal links', TD ), ai: __( 'AI adds internal links', TD ), selected: sprintf( /* translators: %d: pages. */ __( 'Links to %d chosen pages', TD ), form.link_ids.length ) }[ form.links_mode ] ],
+			[ 'format-image', { generate: __( 'AI image (WebP 80%)', TD ), upload: __( 'Your image (WebP 80%)', TD ), none: __( 'No featured image', TD ) }[ form.image_mode ] ],
+			cfg.seo ? [ 'chart-line', sprintf( /* translators: %s: plugin. */ __( 'SEO via %s', TD ), cfg.seo.name ) ] : [ 'warning', __( 'No SEO plugin — built-in meta & schema', TD ) ],
+		];
+		if ( form.copy_acf && cfg.acf.active ) {
+			summary.push( [ 'admin-page', __( 'Copies ACF from last article', TD ) ] );
+		}
+
+		return h(
+			'div',
+			{ className: 'tai-app' },
+			h(
+				'div',
+				{ className: 'tai-topbar' },
+				h( ConnectionPill, { status, checking } ),
+				cfg.settingsUrl ? h( Button, { variant: 'tertiary', icon: 'admin-generic', href: cfg.settingsUrl }, __( 'Settings', TD ) ) : null
+			),
+			h(
+				'div',
+				{ className: 'tai-layout' },
+				h(
+					'form',
+					{ className: 'tai-main', onSubmit: submit },
+					error ? h( Notice, { status: 'error', onRemove: () => setError( null ) }, error ) : null,
+
+					h(
+						Step,
+						{ n: 1, title: __( 'Topic', TD ), help: sprintf( /* translators: %d: articles. */ __( 'Written in the tone of voice of your latest %d articles.', TD ), cfg.scanCount ) },
+						h(
+							'div',
+							{ className: 'tai-title-input' },
+							h( TextControl, {
+								...field,
+								ref: titleRef,
+								label: __( 'Main title', TD ),
+								placeholder: __( 'e.g. How to choose the right running shoes', TD ),
+								value: form.title,
+								onChange: set( 'title' ),
+								onKeyDown: ( e ) => {
+									if ( ( e.metaKey || e.ctrlKey ) && e.key === 'Enter' ) {
+										submit();
+									}
+								},
+							} )
+						),
+						h(
+							'div',
+							{ className: 'tai-grid-2' },
+							h( TextControl, {
+								...field,
+								label: __( 'Focus keyword', TD ),
+								placeholder: __( 'Optional — AI picks one', TD ),
+								value: form.keyword,
+								onChange: set( 'keyword' ),
+							} ),
+							cfg.categories.length
+								? h( SelectControl, {
+									...field,
+									label: __( 'Category', TD ),
+									value: String( form.category ),
+									onChange: ( v ) => set( 'category' )( parseInt( v, 10 ) || 0 ),
+									options: [ { value: '0', label: __( '✨ Let AI choose', TD ) } ].concat( cfg.categories.map( ( c ) => ( { value: String( c.id ), label: c.name } ) ) ),
+								} )
+								: null
+						),
+						h( LengthControl, { value: form.length, onChange: set( 'length' ) } )
+					),
+
+					h(
+						Step,
+						{ n: 2, title: __( 'Call to action & internal links', TD ), help: __( 'The article ends with a CTA button; links are only added where they genuinely fit.', TD ) },
+						h( SelectControl, {
+							...field,
+							label: __( 'Main CTA page', TD ),
+							value: String( form.cta ),
+							onChange: ( v ) => set( 'cta' )( parseInt( v, 10 ) || 0 ),
+							options: [ { value: '0', label: __( '— No CTA —', TD ) } ].concat( cfg.pages.map( ( p ) => ( { value: String( p.id ), label: p.title } ) ) ),
+						} ),
+						h( 'p', { className: 'tai-label' }, __( 'Internal links', TD ) ),
+						h( Tiles, {
+							label: __( 'Internal links', TD ),
+							value: form.links_mode,
+							onChange: set( 'links_mode' ),
+							options: [
+								{ value: 'ai', icon: 'lightbulb', label: __( 'Let AI decide', TD ), hint: __( 'From your published content', TD ) },
+								{ value: 'selected', icon: 'list-view', label: __( 'Pages I choose', TD ), hint: __( 'Linked where relevant', TD ) },
+								{ value: 'none', icon: 'dismiss', label: __( 'None', TD ), hint: __( 'Only the CTA', TD ) },
+							],
+						} ),
+						form.links_mode === 'selected' ? h( LinkPicker, { selected: form.link_ids, onChange: set( 'link_ids' ) } ) : null
+					),
+
+					h(
+						Step,
+						{ n: 3, title: __( 'Featured image', TD ), help: __( 'Converted to WebP at 80% quality, resized, with SEO alt text.', TD ) },
+						cfg.canUpload
+							? h( Tiles, {
+								label: __( 'Featured image', TD ),
+								value: form.image_mode,
+								onChange: set( 'image_mode' ),
+								options: [
+									{
+										value: 'generate',
+										icon: 'art',
+										label: __( 'Generate with AI', TD ),
+										hint: imageGen ? __( 'Matches the article', TD ) : __( 'Not supported by your provider', TD ),
+										disabled: ! imageGen,
+										disabledReason: imageGen ? '' : __( 'Your connected provider cannot generate images. Connect OpenAI or Google in Settings → Connectors.', TD ),
+									},
+									{ value: 'upload', icon: 'upload', label: __( 'Upload / Media Library', TD ), hint: __( 'Use your own photo', TD ) },
+									{ value: 'none', icon: 'hidden', label: __( 'No image', TD ), hint: __( 'Add one later', TD ) },
+								],
+							} )
+							: h( Notice, { status: 'info', isDismissible: false }, __( 'You do not have permission to upload images.', TD ) ),
+						form.image_mode === 'upload' ? h( ImagePicker, { value: form.attachment_id, onChange: set( 'attachment_id' ) } ) : null,
+						form.image_mode === 'generate'
+							? h( TextareaControl, {
+								__nextHasNoMarginBottom: true,
+								label: __( 'Image idea (optional)', TD ),
+								placeholder: __( 'Leave empty and AI describes an image that fits the article.', TD ),
+								value: form.image_prompt,
+								onChange: set( 'image_prompt' ),
+								rows: 2,
+							} )
+							: null
+					),
+
+					h(
+						Step,
+						{
+							n: 4,
+							title: __( 'Extras', TD ),
+							help: __( 'Optional fine-tuning.', TD ),
+							aside: h( Button, { variant: 'tertiary', onClick: () => setShowMore( ! showMore ), 'aria-expanded': showMore, icon: showMore ? 'arrow-up-alt2' : 'arrow-down-alt2' }, showMore ? __( 'Less', TD ) : __( 'More', TD ) ),
+						},
+						cfg.acf.active
+							? h( CheckboxControl, {
+								__nextHasNoMarginBottom: true,
+								label: __( 'Copy ACF from last article', TD ),
+								help: cfg.acf.lastArticle
+									? sprintf( /* translators: %s: title. */ __( 'Prefills custom fields from “%s”.', TD ), cfg.acf.lastArticle )
+									: __( 'No published article to copy from yet.', TD ),
+								disabled: ! cfg.acf.lastArticle,
+								checked: form.copy_acf,
+								onChange: set( 'copy_acf' ),
+							} )
+							: null,
+						showMore
+							? h(
+								Fragment,
+								null,
+								h( TextareaControl, {
+									__nextHasNoMarginBottom: true,
+									label: __( 'Additional instructions', TD ),
+									placeholder: __( 'Angle, audience, points to include, things to avoid…', TD ),
+									value: form.instructions,
+									onChange: set( 'instructions' ),
+									rows: 3,
+								} ),
+								h( CheckboxControl, {
+									__nextHasNoMarginBottom: true,
+									label: __( 'Re-analyse tone of voice', TD ),
+									help: __( 'The saved tone profile refreshes automatically when articles change; tick to force it.', TD ),
+									checked: form.refresh_style,
+									onChange: set( 'refresh_style' ),
+								} )
+							)
+							: ! cfg.acf.active
+								? h( 'p', { className: 'tai-help' }, __( 'Additional instructions and tone settings.', TD ) )
+								: null
+					)
+				),
+
+				h(
+					'aside',
+					{ className: 'tai-side' },
+					h(
+						'section',
+						{ className: 'tai-card tai-summary' },
+						h( 'h2', null, __( 'Summary', TD ) ),
+						h( 'ul', null, summary.map( ( [ icon, text ], i ) => h( 'li', { key: i }, h( Icon, { name: icon } ), h( 'span', null, text ) ) ) ),
+						started
+							? h(
+								Notice,
+								{ status: 'success', isDismissible: true, onRemove: () => setStarted( null ) },
+								/* translators: %s: title. */
+								sprintf( __( '“%s” is being written. We’ll notify you when the draft is ready — you can leave this page.', TD ), started.title )
+							)
+							: null,
+						h(
+							Button,
+							{ variant: 'primary', className: 'tai-generate', onClick: submit, disabled: ! ready, isBusy: submitting, __next40pxDefaultSize: true },
+							h( Icon, { name: 'superhero-alt' } ),
+							submitting ? __( 'Starting…', TD ) : __( 'Generate draft', TD )
+						),
+						missing.length && form.title ? h( 'ul', { className: 'tai-missing' }, missing.map( ( m, i ) => h( 'li', { key: i }, m ) ) ) : null,
+						h( 'p', { className: 'tai-help tai-center' }, __( 'Saved as a draft — nothing is published.', TD ), h( 'br' ), h( 'kbd', null, '⌘/Ctrl + Enter' ) )
+					),
+					h( JobsPanel, { highlightId: started ? started.id : null } )
+				)
+			)
+		);
+	}
+
+	if ( wp.element.createRoot ) {
+		wp.element.createRoot( mount ).render( h( App ) );
+	} else {
+		wp.element.render( h( App ), mount );
+	}
+} )( window.wp, window.taiData );
