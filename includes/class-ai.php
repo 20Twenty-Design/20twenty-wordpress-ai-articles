@@ -111,26 +111,37 @@ class AI {
 		return $status;
 	}
 
+	/** Upper bound for requested output tokens; reasoning tokens count towards it on reasoning models. */
+	const MAX_OUTPUT_TOKENS = 16000;
+
 	/**
 	 * Generate text.
 	 *
+	 * Temperature and the output limit are sent when the model accepts them. Reasoning models (e.g. OpenAI
+	 * GPT-5 / o-series, current Claude models) reject some of these and provider metadata cannot tell in
+	 * advance, so a rejected parameter is dropped, the request retried, and the result remembered until the
+	 * model changes.
+	 *
+	 * @param float|null $temperature
 	 * @return string|WP_Error
 	 */
-	public static function text( $prompt, $system = '', $temperature = 0.7, $max_tokens = 8000 ) {
+	public static function text( $prompt, $system = '', $max_tokens = 8000, $temperature = null ) {
 		return self::run(
-			function () use ( $prompt, $system, $temperature, $max_tokens ) {
-				$builder = self::builder( $prompt );
-				if ( '' !== $system ) {
-					$builder = self::chain( $builder, 'using_system_instruction', array( $system ) );
-				}
-				$builder = self::chain( $builder, 'using_temperature', array( (float) $temperature ) );
-				$builder = self::chain( $builder, 'using_max_tokens', array( (int) $max_tokens ) );
-				if ( is_wp_error( $builder ) ) {
-					return $builder;
-				}
+			function () use ( $prompt, $system, $max_tokens, $temperature ) {
+				$params = array(
+					'temperature' => null === $temperature || self::rejects( 'temperature' ) ? null : (float) $temperature,
+					'max_tokens'  => self::rejects( 'max_tokens' ) ? null : min( (int) $max_tokens, self::MAX_OUTPUT_TOKENS ),
+				);
 
-				// generate_text_result() also reports token usage and the model that ran.
-				$result = self::invoke( $builder, 'generate_text_result' );
+				for ( $attempt = 0; $attempt < 3; $attempt++ ) {
+					$result = self::generate_text( $prompt, $system, $params );
+					$param  = is_wp_error( $result ) ? self::rejected_param( $result, $params ) : '';
+					if ( '' === $param ) {
+						break;
+					}
+					self::remember_rejected( $param );
+					$params[ $param ] = null;
+				}
 				if ( is_wp_error( $result ) ) {
 					return $result;
 				}
@@ -152,12 +163,112 @@ class AI {
 	}
 
 	/**
+	 * One text request. Null params are left to the provider.
+	 *
+	 * @return object|string|WP_Error GenerativeAiResult (or string on older clients).
+	 */
+	private static function generate_text( $prompt, $system, array $params ) {
+		$builder = self::builder( $prompt );
+		$model   = Settings::get( 'text_model' );
+		if ( $model ) {
+			$builder = self::chain( $builder, 'using_model_preference', array( $model ) ); // Falls back to automatic when unavailable.
+		}
+		if ( '' !== $system ) {
+			$builder = self::chain( $builder, 'using_system_instruction', array( $system ) );
+		}
+		if ( null !== $params['max_tokens'] ) {
+			$builder = self::chain( $builder, 'using_max_tokens', array( (int) $params['max_tokens'] ) );
+		}
+		if ( null !== $params['temperature'] ) {
+			$builder = self::chain( $builder, 'using_temperature', array( (float) $params['temperature'] ) );
+		}
+		if ( is_wp_error( $builder ) ) {
+			return $builder;
+		}
+		// generate_text_result() also reports token usage and the model that ran.
+		return self::invoke( $builder, 'generate_text_result' );
+	}
+
+	/**
+	 * Which of the sent optional parameters an error complains about ('' = none / other error).
+	 */
+	private static function rejected_param( WP_Error $error, array $params ) {
+		$message = $error->get_error_message();
+		if ( ! preg_match( '/unsupported|not supported|does not support|not allowed|cannot be combined|too large|exceed|greater than|invalid/i', $message ) ) {
+			return '';
+		}
+		if ( null !== $params['temperature'] && preg_match( '/temperature|sampling/i', $message ) ) {
+			return 'temperature';
+		}
+		if ( null !== $params['max_tokens'] && preg_match( '/max[_ ]?(output_|completion_)?tokens|maxTokens|maximum (output )?tokens/i', $message ) ) {
+			return 'max_tokens';
+		}
+		return '';
+	}
+
+	/**
+	 * Rejections are remembered per selected text model ("auto" = automatic choice) and reset when
+	 * the model in use changes (see forget_rejections()).
+	 */
+	private static function rejects( $param ) {
+		$rejected = get_option( 'tai_ai_rejected', array() );
+		$key      = Settings::get( 'text_model' ) ? Settings::get( 'text_model' ) : 'auto';
+		return ! empty( $rejected[ $key ][ $param ] );
+	}
+
+	private static function remember_rejected( $param ) {
+		$rejected = (array) get_option( 'tai_ai_rejected', array() );
+		$key      = Settings::get( 'text_model' ) ? Settings::get( 'text_model' ) : 'auto';
+
+		$rejected[ $key ][ $param ] = 1;
+		update_option( 'tai_ai_rejected', $rejected, false );
+	}
+
+	public static function forget_rejections() {
+		delete_option( 'tai_ai_rejected' );
+	}
+
+	/**
+	 * Models offered by the connected providers, for the model preference setting. Cached for an hour.
+	 *
+	 * @param string $capability 'text' or 'image'.
+	 * @return array[] id, name, provider
+	 */
+	public static function available_models( $capability = 'text' ) {
+		$cache_key = 'tai_models_' . $capability;
+		$cached    = get_transient( $cache_key );
+		if ( is_array( $cached ) ) {
+			return $cached;
+		}
+		$models = array();
+		if ( self::is_available() && class_exists( '\WordPress\AiClient\AiClient' ) && class_exists( '\WordPress\AiClient\Providers\Models\DTO\ModelRequirements' ) ) {
+			try {
+				$enum         = '\WordPress\AiClient\Providers\Models\Enums\CapabilityEnum';
+				$requirements = new \WordPress\AiClient\Providers\Models\DTO\ModelRequirements( array( 'image' === $capability ? $enum::imageGeneration() : $enum::textGeneration() ), array() );
+				foreach ( \WordPress\AiClient\AiClient::defaultRegistry()->findModelsMetadataForSupport( $requirements ) as $group ) {
+					foreach ( $group->getModels() as $model ) {
+						$models[] = array(
+							'id'       => (string) $model->getId(),
+							'name'     => (string) $model->getName(),
+							'provider' => (string) $group->getProvider()->getName(),
+						);
+					}
+				}
+			} catch ( \Throwable $e ) {
+				$models = array();
+			}
+		}
+		set_transient( $cache_key, $models, $models ? HOUR_IN_SECONDS : 5 * MINUTE_IN_SECONDS );
+		return $models;
+	}
+
+	/**
 	 * Generate text and decode it as JSON (one repair attempt on failure).
 	 *
 	 * @return array|WP_Error
 	 */
-	public static function json( $prompt, $system = '', $temperature = 0.4, $max_tokens = 8000 ) {
-		$text = self::text( $prompt, $system, $temperature, $max_tokens );
+	public static function json( $prompt, $system = '', $max_tokens = 8000, $temperature = null ) {
+		$text = self::text( $prompt, $system, $max_tokens, $temperature );
 		if ( is_wp_error( $text ) ) {
 			return $text;
 		}
@@ -169,8 +280,8 @@ class AI {
 		$repair = self::text(
 			"The following was meant to be one valid JSON object but it is not. Return ONLY the corrected, complete JSON object, no commentary, no code fences.\n\n" . $text,
 			'',
-			0,
-			$max_tokens
+			$max_tokens,
+			0
 		);
 		if ( is_wp_error( $repair ) ) {
 			return $repair;
@@ -191,9 +302,14 @@ class AI {
 		return self::run(
 			function () use ( $prompt ) {
 				// Prefer a 16:9 image; not every model accepts an aspect ratio, so retry without it.
-				$result = self::invoke( self::chain( self::builder( $prompt ), 'as_output_media_aspect_ratio', array( '16:9' ) ), 'generate_image_result' );
+				$base = function () use ( $prompt ) {
+					$builder = self::builder( $prompt );
+					$model   = Settings::get( 'image_model' );
+					return $model ? self::chain( $builder, 'using_model_preference', array( $model ) ) : $builder;
+				};
+				$result = self::invoke( self::chain( $base(), 'as_output_media_aspect_ratio', array( '16:9' ) ), 'generate_image_result' );
 				if ( is_wp_error( $result ) ) {
-					$result = self::invoke( self::builder( $prompt ), 'generate_image_result' );
+					$result = self::invoke( $base(), 'generate_image_result' );
 				}
 				if ( is_wp_error( $result ) ) {
 					return $result;

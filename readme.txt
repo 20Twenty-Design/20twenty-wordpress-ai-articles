@@ -39,6 +39,12 @@ Pipeline (each stage runs in its own background request: non-blocking loopback t
 6. ACF fields copied from the last published article (optional).
 7. SEO: Yoast SEO, Rank Math, AIOSEO, SEOPress or The SEO Framework get SEO title, meta description, focus + other keywords and schema type. Without an SEO plugin a warning is shown and AI Articles prints the meta description and JSON-LD itself.
 
+== AI models ==
+
+By default the connector picks the model. Under Settings → AI Articles → AI models you can choose the writing and image model from the models your connected providers offer; if the chosen model is unavailable the connector falls back to an automatic choice.
+
+Models differ in which settings they accept (reasoning models reject temperature, some reject output limits). The plugin sends temperature and output limits where accepted; when a model rejects one, it retries without it and remembers that until the model changes.
+
 == Cost and time estimate ==
 
 Before you click Generate, the summary shows estimated tokens, cost and time for the current choices (length, image, links, extras), with a per-step breakdown. Estimates start from built-in defaults and learn from your own generations: the WordPress AI Client reports real token usage and the model used, and each step is timed. Finished jobs show the actual tokens, cost and duration.

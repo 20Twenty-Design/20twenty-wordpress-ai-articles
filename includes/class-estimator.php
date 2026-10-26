@@ -104,6 +104,9 @@ class Estimator {
 			$stats['stages'][ $stage ] = $s;
 
 			if ( ! empty( $m['text_model'] ) ) {
+				if ( ! empty( $stats['text']['model'] ) && $stats['text']['model'] !== $m['text_model'] ) {
+					AI::forget_rejections(); // A different model may accept temperature / output limits again.
+				}
 				$stats['text'] = array(
 					'model'    => $m['text_model'],
 					'provider' => $m['provider'] ?? '',
@@ -232,8 +235,9 @@ class Estimator {
 			$link_chars += strlen( $target['title'] . $target['url'] ) + 6;
 		}
 
-		$text_model  = $stats['text']['model'] ?? '';
-		$image_model = $stats['image']['model'] ?? '';
+		// The chosen model wins; otherwise the model the connector used last time.
+		$text_model  = Settings::get( 'text_model' ) ? Settings::get( 'text_model' ) : ( $stats['text']['model'] ?? '' );
+		$image_model = Settings::get( 'image_model' ) ? Settings::get( 'image_model' ) : ( $stats['image']['model'] ?? '' );
 
 		return array(
 			'jobs'        => (int) ( $stats['jobs'] ?? 0 ),

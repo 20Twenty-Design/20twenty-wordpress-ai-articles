@@ -31,6 +31,8 @@ class Settings {
 			'image_style'       => 'Photorealistic editorial photo, natural lighting, no text, letters, watermarks or logos.',
 			'image_max_width'   => 1600,
 			'brand_notes'       => '',
+			'text_model'        => '',
+			'image_model'       => '',
 			'price_text_in'     => '',
 			'price_text_out'    => '',
 			'price_image'       => '',
@@ -104,6 +106,12 @@ class Settings {
 			$value       = trim( (string) ( $input[ $key ] ?? '' ) );
 			$out[ $key ] = '' === $value ? '' : (string) max( 0, (float) str_replace( ',', '.', $value ) );
 		}
+		foreach ( array( 'text_model', 'image_model' ) as $key ) {
+			$out[ $key ] = preg_replace( '/[^A-Za-z0-9._:\/@-]/', '', (string) ( $input[ $key ] ?? '' ) );
+		}
+		if ( $out['text_model'] !== self::get( 'text_model' ) ) {
+			AI::forget_rejections();
+		}
 		$out['image_style'] = sanitize_textarea_field( $input['image_style'] ?? '' );
 		$out['brand_notes'] = sanitize_textarea_field( $input['brand_notes'] ?? '' );
 
@@ -170,6 +178,40 @@ class Settings {
 								</label>
 							<?php endforeach; ?>
 							<p class="description"><?php esc_html_e( 'Leave all unchecked to enable every article-like post type (pages are never included).', 'twenty-ai-articles' ); ?></p>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row"><?php esc_html_e( 'AI models', 'twenty-ai-articles' ); ?></th>
+						<td>
+							<?php
+							foreach ( array(
+								'text_model'  => array( __( 'Writing', 'twenty-ai-articles' ), 'text' ),
+								'image_model' => array( __( 'Images', 'twenty-ai-articles' ), 'image' ),
+							) as $key => $info ) :
+								$models = AI::available_models( $info[1] );
+								$groups = array();
+								foreach ( $models as $model ) {
+									$groups[ $model['provider'] ][] = $model;
+								}
+								?>
+								<p>
+									<label for="tai-<?php echo esc_attr( $key ); ?>" style="display:inline-block;min-width:70px"><?php echo esc_html( $info[0] ); ?></label>
+									<select id="tai-<?php echo esc_attr( $key ); ?>" name="<?php echo esc_attr( $name . '[' . $key . ']' ); ?>">
+										<option value=""><?php esc_html_e( 'Automatic (connector chooses)', 'twenty-ai-articles' ); ?></option>
+										<?php if ( $s[ $key ] && ! in_array( $s[ $key ], wp_list_pluck( $models, 'id' ), true ) ) : ?>
+											<option value="<?php echo esc_attr( $s[ $key ] ); ?>" selected><?php echo esc_html( $s[ $key ] . ' ' . __( '(not currently available)', 'twenty-ai-articles' ) ); ?></option>
+										<?php endif; ?>
+										<?php foreach ( $groups as $provider => $list ) : ?>
+											<optgroup label="<?php echo esc_attr( $provider ); ?>">
+												<?php foreach ( $list as $model ) : ?>
+													<option value="<?php echo esc_attr( $model['id'] ); ?>" <?php selected( $s[ $key ], $model['id'] ); ?>><?php echo esc_html( $model['name'] && $model['name'] !== $model['id'] ? $model['name'] . ' (' . $model['id'] . ')' : $model['id'] ); ?></option>
+												<?php endforeach; ?>
+											</optgroup>
+										<?php endforeach; ?>
+									</select>
+								</p>
+							<?php endforeach; ?>
+							<p class="description"><?php esc_html_e( 'Models offered by your connected AI providers (Settings → Connectors). If the chosen model is unavailable, the connector picks one automatically.', 'twenty-ai-articles' ); ?></p>
 						</td>
 					</tr>
 					<tr>

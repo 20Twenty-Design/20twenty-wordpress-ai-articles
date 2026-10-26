@@ -160,7 +160,7 @@ ARTICLES:
 {$samples}
 PROMPT;
 
-		$style = AI::text( $prompt, self::system(), 0.3, 1500 );
+		$style = AI::text( $prompt, self::system(), 6000, 0.3 );
 		if ( is_wp_error( $style ) ) {
 			return $style;
 		}
@@ -225,7 +225,7 @@ Write every text value in the website's language. Return ONLY a JSON object of t
 }
 PROMPT;
 
-		$plan = AI::json( $prompt, self::system(), 0.4, 3000 );
+		$plan = AI::json( $prompt, self::system(), 8000, 0.4 );
 		if ( is_wp_error( $plan ) ) {
 			return $plan;
 		}
@@ -383,7 +383,7 @@ Return ONLY a JSON object of this exact shape:
 }
 PROMPT;
 
-		$data = AI::json( $prompt, self::system(), 0.7, max( 6000, (int) ( $words * 3.5 ) ) );
+		$data = AI::json( $prompt, self::system(), max( 12000, (int) ( $words * 5 ) ), 0.7 );
 		if ( is_wp_error( $data ) ) {
 			return $data;
 		}
