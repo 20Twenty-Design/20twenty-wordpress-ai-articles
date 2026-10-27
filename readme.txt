@@ -34,7 +34,7 @@ Pipeline (each stage runs in its own background request: non-blocking loopback t
 1. Analyse the first (oldest) published articles of the same post type → house style guide (cached until those articles change). Articles created by this plugin are never used as reference, so the voice does not drift towards AI-written content. "As other articles" length uses their average word count.
 2. Plan: outline, focus + secondary keywords, SEO title, slug, meta description, excerpt, summary, key takeaways, category, image prompt + alt text.
 3. Write: AI returns structured JSON that is converted to native Gutenberg blocks (headings, paragraphs, lists, quotes, bold/italic, links, CTA buttons). Links pointing anywhere other than the allowed internal pages are removed.
-   The draft uses the same format as your newest hand-written article: Gutenberg blocks, classic-editor HTML, or the Avada, WPBakery or Divi builder. For page builders the section, row, column and text settings of that article are reused, the image and CTA use the builder's own image and button elements, and the builder's page options (e.g. Avada sidebar / title bar) are copied.
+   The draft uses the same format as your newest hand-written article: Gutenberg blocks, classic-editor HTML, or the Avada, WPBakery or Divi builder. For page builders the five most recent articles are analysed element by element: whether each section gets its own container (and which background each one uses), whether headings are Avada title elements or text, whether lists are checklists, separators between sections, where the image sits (or none, when the theme shows the featured image), and the settings of every element, including a different look for the call-to-action section. The draft is rebuilt from the newest article's containers with those elements, and the builder's page options (e.g. Avada sidebar / title bar) are copied. The progress log lists what was detected.
 4. Featured image: converted to WebP at 80% quality (sub-sizes too), resized to the max width, AI alt text.
 5. Draft created (never published) with excerpt, category and featured image.
 6. ACF fields copied from the last published article (optional).
@@ -87,6 +87,12 @@ Installed sites see new versions on Dashboard → Updates and the Plugins screen
 3. The "Release" GitHub Action checks the versions match, builds `twenty-ai-articles.zip` and publishes the GitHub release with generated notes. Edit the release notes on GitHub if you like; they appear as the changelog in WordPress.
 
 == Changelog ==
+
+= 1.1.5 =
+* Better Avada matching: the five most recent articles are analysed instead of one. Each section gets its own container like in your articles (backgrounds and separator sections included), headings become Avada title elements, bullet lists become checklists, and the call-to-action section keeps its own colours. No duplicate image when your articles rely on Avada's featured image.
+* The progress log says what the layout analysis found.
+* The client preview shows the featured image when the article content has none.
+* Tone analysis now sees headings and lists built with Avada title and checklist elements.
 
 = 1.1.4 =
 * New: Articles match the format of your existing posts. Sites built with Avada (Fusion Builder), WPBakery or Divi get the same builder layout as the newest hand-written article, including its page options; classic-editor sites get clean HTML instead of block markup.

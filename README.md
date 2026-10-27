@@ -4,7 +4,7 @@ WordPress plugin that generates complete, SEO-ready **draft** articles with the 
 
 - Available for every article-like post type (Posts and similar custom post types, never Pages).
 - Learns tone of voice and structure from your first (oldest) articles.
-- Native Gutenberg blocks (H2/H3, paragraphs, lists, bold, quotes, CTA button), internal links, excerpt, summary, category. Matches your posts' format: Avada, WPBakery and Divi layouts or classic-editor HTML.
+- Native Gutenberg blocks (H2/H3, paragraphs, lists, bold, quotes, CTA button), internal links, excerpt, summary, category. Matches your posts' format: Avada, WPBakery and Divi layouts (sections, title elements, checklists, separators and element settings analysed from your recent articles) or classic-editor HTML.
 - Featured image uploaded or AI-generated, converted to WebP at 80% with AI alt text.
 - SEO meta + schema for Yoast SEO, Rank Math, AIOSEO, SEOPress, The SEO Framework (or built-in JSON-LD and a warning when none is installed). Headless-friendly `tai_seo` REST field.
 - Runs in the background with progress in the admin bar and a notification when the draft is ready.

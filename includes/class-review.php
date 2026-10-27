@@ -310,6 +310,9 @@ class Review {
 	<main class="tai-p">
 		<p class="tai-p__site"><?php echo esc_html( get_bloginfo( 'name' ) ); ?></p>
 		<h1><?php echo esc_html( $data['title'] ); ?></h1>
+		<?php if ( $data['featured_image'] && false === stripos( $data['content'], '<img' ) ) : // Themes like Avada show it above the content. ?>
+			<figure><img src="<?php echo esc_url( $data['featured_image']['url'] ); ?>" alt="<?php echo esc_attr( $data['featured_image']['alt'] ); ?>"></figure>
+		<?php endif; ?>
 		<?php echo $data['content']; // phpcs:ignore WordPress.Security.EscapeOutput -- Rendered post content. ?>
 	</main>
 	<?php echo self::review_box( $post, true ); // phpcs:ignore WordPress.Security.EscapeOutput -- Escaped in review_box(). ?>

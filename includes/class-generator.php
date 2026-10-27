@@ -464,7 +464,7 @@ PROMPT;
 		$content = $job['content'];
 
 		// Same format as the site's articles (blocks, classic HTML or a page builder). The image goes
-		// right below the title; editors can move it from there.
+		// right below the title, or for page builders where their articles have it.
 		$layout  = Layout::detect( $in['post_type'] );
 		$content = Layout::apply( $content, $layout, (int) ( $job['image_id'] ?? 0 ) );
 
@@ -516,8 +516,8 @@ PROMPT;
 		}
 
 		if ( isset( Layout::BUILDERS[ $layout['format'] ] ) && $layout['template'] ) {
-			/* translators: 1: post ID, 2: page builder name, 3: article title. */
-			return sprintf( __( 'Draft #%1$d saved (not published), laid out with %2$s like “%3$s”.', 'twenty-ai-articles' ), $post_id, $layout['label'], html_entity_decode( get_the_title( $layout['template'] ) ) );
+			/* translators: 1: post ID, 2: page builder name, 3: article title, 4: what the layout analysis found. */
+			return sprintf( __( 'Draft #%1$d saved (not published), laid out with %2$s like “%3$s” (%4$s).', 'twenty-ai-articles' ), $post_id, $layout['label'], html_entity_decode( get_the_title( $layout['template'] ) ), implode( ', ', $layout['notes'] ) );
 		}
 		/* translators: 1: post ID, 2: editor name. */
 		return sprintf( __( 'Draft #%1$d saved (not published), %2$s format.', 'twenty-ai-articles' ), $post_id, $layout['label'] );
