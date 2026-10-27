@@ -1,13 +1,13 @@
 /* global wp, taiReview */
 /**
- * Block editor panel "Client approval": email a private preview link, see the client's decision.
+ * "Client approval": email a private preview link, see the client's decision.
+ * A sidebar panel in the block editor, a meta box in the classic editor and page builders.
  */
 ( function ( wp, cfg ) {
 	'use strict';
 
 	const { createElement: h, Fragment, useState, useEffect } = wp.element;
 	const { Button, TextControl, TextareaControl, Notice, Spinner, ExternalLink } = wp.components;
-	const { useSelect, useDispatch } = wp.data;
 	const { __, sprintf } = wp.i18n;
 	const apiFetch = wp.apiFetch;
 	const TD = 'twenty-ai-articles';
@@ -21,17 +21,7 @@
 
 	const fmtDate = ( ts ) => new Date( ts * 1000 ).toLocaleString( undefined, { dateStyle: 'medium', timeStyle: 'short' } );
 
-	function ReviewPanel() {
-		const { postId, isNew, isDirty } = useSelect( ( select ) => {
-			const editor = select( 'core/editor' );
-			return {
-				postId: editor.getCurrentPostId(),
-				isNew: editor.isEditedPostNew(),
-				isDirty: editor.isEditedPostDirty(),
-			};
-		}, [] );
-		const { savePost } = useDispatch( 'core/editor' );
-
+	function ReviewPanel( { postId, isNew, isDirty, savePost, classic } ) {
 		const [ data, setData ] = useState( null );
 		const [ emails, setEmails ] = useState( '' );
 		const [ message, setMessage ] = useState( '' );
@@ -58,7 +48,7 @@
 			setNotice( null );
 			try {
 				// The client sees the saved version, so save pending edits first.
-				if ( isDirty ) {
+				if ( isDirty && savePost ) {
 					await savePost();
 				}
 				const res = await apiFetch( { path, method: 'POST', data: { emails, message } } );
@@ -151,6 +141,7 @@
 				placeholder: __( 'A short personal note. A friendly default is used when empty.', TD ),
 				__nextHasNoMarginBottom: true,
 			} ),
+			classic ? h( 'p', { className: 'description', style: { margin: '8px 0 0' } }, __( 'The client sees the last saved version, so save your changes first.', TD ) ) : null,
 			h(
 				'div',
 				{ style: { display: 'flex', gap: 8, margin: '12px 0' } },
@@ -187,9 +178,39 @@
 		);
 	}
 
-	if ( Panel ) {
+	function EditorReviewPanel() {
+		const props = wp.data.useSelect( ( select ) => {
+			const editor = select( 'core/editor' );
+			return {
+				postId: editor.getCurrentPostId(),
+				isNew: editor.isEditedPostNew(),
+				isDirty: editor.isEditedPostDirty(),
+			};
+		}, [] );
+		const { savePost } = wp.data.useDispatch( 'core/editor' );
+		return h( ReviewPanel, { ...props, savePost } );
+	}
+
+	if ( Panel && wp.plugins ) {
 		wp.plugins.registerPlugin( 'tai-review', {
-			render: () => h( Panel, { name: 'tai-review', title: __( 'Client approval', TD ), className: 'tai-review-panel' }, h( ReviewPanel ) ),
+			render: () => h( Panel, { name: 'tai-review', title: __( 'Client approval', TD ), className: 'tai-review-panel' }, h( EditorReviewPanel ) ),
 		} );
+	}
+
+	// Classic editor / page builders: meta box.
+	const mount = () => {
+		document.querySelectorAll( '.tai-review-classic' ).forEach( ( el ) => {
+			const panel = h( ReviewPanel, { postId: Number( el.dataset.postId ), isNew: el.dataset.new === '1', isDirty: false, classic: true } );
+			if ( wp.element.createRoot ) {
+				wp.element.createRoot( el ).render( panel );
+			} else {
+				wp.element.render( panel, el );
+			}
+		} );
+	};
+	if ( document.readyState === 'loading' ) {
+		document.addEventListener( 'DOMContentLoaded', mount );
+	} else {
+		mount();
 	}
 } )( window.wp, window.taiReview || {} );

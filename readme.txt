@@ -34,6 +34,7 @@ Pipeline (each stage runs in its own background request: non-blocking loopback t
 1. Analyse the first (oldest) published articles of the same post type → house style guide (cached until those articles change). Articles created by this plugin are never used as reference, so the voice does not drift towards AI-written content. "As other articles" length uses their average word count.
 2. Plan: outline, focus + secondary keywords, SEO title, slug, meta description, excerpt, summary, key takeaways, category, image prompt + alt text.
 3. Write: AI returns structured JSON that is converted to native Gutenberg blocks (headings, paragraphs, lists, quotes, bold/italic, links, CTA buttons). Links pointing anywhere other than the allowed internal pages are removed.
+   The draft uses the same format as your newest hand-written article: Gutenberg blocks, classic-editor HTML, or the Avada, WPBakery or Divi builder. For page builders the section, row, column and text settings of that article are reused, the image and CTA use the builder's own image and button elements, and the builder's page options (e.g. Avada sidebar / title bar) are copied.
 4. Featured image: converted to WebP at 80% quality (sub-sizes too), resized to the max width, AI alt text.
 5. Draft created (never published) with excerpt, category and featured image.
 6. ACF fields copied from the last published article (optional).
@@ -57,7 +58,7 @@ Generated posts expose a `tai_seo` field in the REST API: seo_title, meta_descri
 
 == Client approval ==
 
-Open a draft in the block editor and use the "Client approval" panel in the sidebar: enter the client's email (a default can be set in Settings) and press Send for approval. The client gets a link that works without logging in, reads the article and presses Approve or Request changes (with a comment). You get an email, and the status shows in the panel and in the posts list. Links expire after 14 days by default and can be withdrawn at any time; they stop working once the article is published (they then redirect to the live article).
+Open a draft and use the "Client approval" panel in the sidebar (a box on the right in the classic editor and page builders): enter the client's email (a default can be set in Settings) and press Send for approval. The client gets a link that works without logging in, reads the article and presses Approve or Request changes (with a comment). You get an email, and the status shows in the panel and in the posts list. Links expire after 14 days by default and can be withdrawn at any time; they stop working once the article is published (they then redirect to the live article).
 
 The preview is a clean standalone page rendered by this plugin, so it works the same on themed and headless sites (including sites that send front-end visitors to wp-admin).
 
@@ -86,6 +87,12 @@ Installed sites see new versions on Dashboard → Updates and the Plugins screen
 3. The "Release" GitHub Action checks the versions match, builds `twenty-ai-articles.zip` and publishes the GitHub release with generated notes. Edit the release notes on GitHub if you like; they appear as the changelog in WordPress.
 
 == Changelog ==
+
+= 1.1.4 =
+* New: Articles match the format of your existing posts. Sites built with Avada (Fusion Builder), WPBakery or Divi get the same builder layout as the newest hand-written article, including its page options; classic-editor sites get clean HTML instead of block markup.
+* New: Client approval is available as a sidebar box in the classic editor and page builders (where Gutenberg is turned off).
+* The client preview page shows page-builder content as clean, readable HTML.
+* Tone analysis ignores page-builder shortcodes.
 
 = 1.1.3 =
 * Fix: Client preview links asked for a WordPress login on headless sites that send visitors to wp-admin.

@@ -33,6 +33,7 @@ class Review {
 		add_action( 'admin_post_nopriv_tai_review', array( __CLASS__, 'handle_form' ) );
 		add_filter( 'display_post_states', array( __CLASS__, 'post_states' ), 10, 2 );
 		add_action( 'enqueue_block_editor_assets', array( __CLASS__, 'editor_assets' ) );
+		add_action( 'add_meta_boxes', array( __CLASS__, 'meta_box' ), 10, 2 );
 	}
 
 	/* ---------------------------------------------------------------------
@@ -324,7 +325,8 @@ class Review {
 	public static function public_data( WP_Post $post ) {
 		$GLOBALS['post'] = $post; // phpcs:ignore WordPress.WP.GlobalVariablesOverride
 		setup_postdata( $post );
-		$content = apply_filters( 'the_content', $post->post_content ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals
+		// Page-builder layouts need the theme's styles, so the preview shows their content as plain HTML.
+		$content = apply_filters( 'the_content', Layout::readable( $post->post_content ) ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals
 		$thumb   = get_post_thumbnail_id( $post );
 		$data    = array(
 			'id'             => (int) $post->ID,
@@ -492,7 +494,31 @@ class Review {
 		if ( ! $screen || ! isset( Plugin::post_types()[ $screen->post_type ] ) ) {
 			return;
 		}
-		wp_enqueue_script( 'tai-review', TAI_URL . 'assets/review.js', array( 'wp-plugins', 'wp-editor', 'wp-element', 'wp-components', 'wp-data', 'wp-api-fetch', 'wp-i18n' ), TAI_VERSION, true );
+		self::enqueue( array( 'wp-plugins', 'wp-editor', 'wp-data' ) );
+	}
+
+	/**
+	 * The same panel as a meta box where the block editor is off (classic editor, Avada, WPBakery, Divi).
+	 */
+	public static function meta_box( $post_type, $post ) {
+		if ( ! $post instanceof WP_Post || ! isset( Plugin::post_types()[ $post_type ] ) || ( function_exists( 'use_block_editor_for_post' ) && use_block_editor_for_post( $post ) ) ) {
+			return;
+		}
+		add_meta_box( 'tai-review', __( 'Client approval', 'twenty-ai-articles' ), array( __CLASS__, 'render_meta_box' ), $post_type, 'side', 'high' );
+		self::enqueue( array() );
+		wp_enqueue_style( 'wp-components' );
+	}
+
+	public static function render_meta_box( WP_Post $post ) {
+		printf(
+			'<div class="tai-review-classic" data-post-id="%d" data-new="%d"></div>',
+			(int) $post->ID,
+			'auto-draft' === $post->post_status ? 1 : 0
+		);
+	}
+
+	private static function enqueue( array $deps ) {
+		wp_enqueue_script( 'tai-review', TAI_URL . 'assets/review.js', array_merge( $deps, array( 'wp-element', 'wp-components', 'wp-api-fetch', 'wp-i18n' ) ), TAI_VERSION, true );
 		wp_localize_script(
 			'tai-review',
 			'taiReview',

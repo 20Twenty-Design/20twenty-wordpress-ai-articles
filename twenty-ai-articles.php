@@ -23,6 +23,7 @@ define( 'TAI_URL', plugin_dir_url( __FILE__ ) );
 require_once TAI_DIR . 'includes/class-settings.php';
 require_once TAI_DIR . 'includes/class-ai.php';
 require_once TAI_DIR . 'includes/class-blocks.php';
+require_once TAI_DIR . 'includes/class-layout.php';
 require_once TAI_DIR . 'includes/class-image.php';
 require_once TAI_DIR . 'includes/class-seo.php';
 require_once TAI_DIR . 'includes/class-acf.php';

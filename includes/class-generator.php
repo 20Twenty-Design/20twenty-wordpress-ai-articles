@@ -463,11 +463,10 @@ PROMPT;
 		$plan    = $job['plan'];
 		$content = $job['content'];
 
-		// The image goes right below the title; editors can move it from there.
-		if ( ! empty( $job['image_id'] ) ) {
-			$image   = Blocks::image( $job['image_id'], (string) get_post_meta( $job['image_id'], '_wp_attachment_image_alt', true ) );
-			$content = '' !== $image ? $image . "\n\n" . $content : $content;
-		}
+		// Same format as the site's articles (blocks, classic HTML or a page builder). The image goes
+		// right below the title; editors can move it from there.
+		$layout  = Layout::detect( $in['post_type'] );
+		$content = Layout::apply( $content, $layout, (int) ( $job['image_id'] ?? 0 ) );
 
 		$post_id = wp_insert_post(
 			wp_slash(
@@ -497,6 +496,7 @@ PROMPT;
 			return $post_id;
 		}
 		$job['post_id'] = $post_id;
+		Layout::copy_meta( $layout, $post_id );
 
 		$tax = Plugin::category_taxonomy( $in['post_type'] );
 		if ( $tax && $plan['category_id'] ) {
@@ -515,8 +515,12 @@ PROMPT;
 			}
 		}
 
-		/* translators: %d: post ID. */
-		return sprintf( __( 'Draft #%d saved (not published).', 'twenty-ai-articles' ), $post_id );
+		if ( isset( Layout::BUILDERS[ $layout['format'] ] ) && $layout['template'] ) {
+			/* translators: 1: post ID, 2: page builder name, 3: article title. */
+			return sprintf( __( 'Draft #%1$d saved (not published), laid out with %2$s like “%3$s”.', 'twenty-ai-articles' ), $post_id, $layout['label'], html_entity_decode( get_the_title( $layout['template'] ) ) );
+		}
+		/* translators: 1: post ID, 2: editor name. */
+		return sprintf( __( 'Draft #%1$d saved (not published), %2$s format.', 'twenty-ai-articles' ), $post_id, $layout['label'] );
 	}
 
 	private static function stage_acf( array &$job ) {
@@ -629,7 +633,7 @@ PROMPT;
 	 * Compact representation of an existing article for style analysis.
 	 */
 	public static function sample( $post ) {
-		$html = $post->post_content;
+		$html = Layout::readable( $post->post_content );
 		preg_match_all( '#<h([1-6])[^>]*>(.*?)</h\1>#is', $html, $m, PREG_SET_ORDER );
 		$headings = array_map(
 			function ( $h ) {
