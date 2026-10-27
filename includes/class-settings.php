@@ -112,6 +112,9 @@ class Settings {
 		if ( $out['text_model'] !== self::get( 'text_model' ) ) {
 			AI::forget_rejections();
 		}
+		if ( $out['image_model'] !== self::get( 'image_model' ) ) {
+			AI::forget_unavailable_image_models();
+		}
 		$out['image_style'] = sanitize_textarea_field( $input['image_style'] ?? '' );
 		$out['brand_notes'] = sanitize_textarea_field( $input['brand_notes'] ?? '' );
 

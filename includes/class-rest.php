@@ -15,6 +15,8 @@ defined( 'ABSPATH' ) || exit;
  * POST /jobs/{id}/retry   Retry a failed job from the failed stage.
  * POST /jobs/{id}/cancel  Cancel a running job.
  * POST /jobs/{id}/seen    Mark a finished job's notification as seen.
+ * POST /jobs/{id}/remove  Remove a finished job from the list (the draft is kept).
+ * POST /jobs/clear        Remove all finished jobs of the current user.
  */
 class Rest {
 
@@ -50,7 +52,16 @@ class Rest {
 				),
 			)
 		);
-		foreach ( array( 'retry', 'cancel', 'seen' ) as $action ) {
+		register_rest_route(
+			self::NS,
+			'/jobs/clear',
+			array(
+				'methods'             => 'POST',
+				'callback'            => array( __CLASS__, 'clear_jobs' ),
+				'permission_callback' => array( __CLASS__, 'can_use' ),
+			)
+		);
+		foreach ( array( 'retry', 'cancel', 'seen', 'remove' ) as $action ) {
 			register_rest_route(
 				self::NS,
 				'/jobs/(?P<id>\d+)/' . $action,
@@ -123,6 +134,17 @@ class Rest {
 	public static function job_seen( WP_REST_Request $request ) {
 		Jobs::mark_seen( (int) $request['id'] );
 		return rest_ensure_response( array( 'ok' => true ) );
+	}
+
+	public static function job_remove( WP_REST_Request $request ) {
+		if ( ! Jobs::remove( (int) $request['id'] ) ) {
+			return new WP_Error( 'tai_job_state', __( 'Jobs that are still running cannot be removed. Cancel it first.', 'twenty-ai-articles' ), array( 'status' => 409 ) );
+		}
+		return rest_ensure_response( array( 'removed' => array( (int) $request['id'] ) ) );
+	}
+
+	public static function clear_jobs() {
+		return rest_ensure_response( array( 'removed' => Jobs::clear( get_current_user_id() ) ) );
 	}
 
 	/**

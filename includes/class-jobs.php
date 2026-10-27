@@ -93,6 +93,9 @@ class Jobs {
 	}
 
 	public static function save( array $job ) {
+		if ( self::POST_TYPE !== get_post_type( $job['id'] ) ) {
+			return; // Removed from the list while a stage was still running.
+		}
 		$job['updated'] = time();
 		update_post_meta( $job['id'], self::META, wp_slash( $job ) );
 	}
@@ -136,6 +139,41 @@ class Jobs {
 
 	public static function mark_seen( $id ) {
 		update_post_meta( $id, '_tai_seen', 1 );
+	}
+
+	/**
+	 * Whether a job can be removed from the list (finished, or cancelled by the user).
+	 */
+	public static function is_removable( array $job ) {
+		return ! self::is_active( $job ) || get_post_meta( $job['id'], '_tai_cancel', true );
+	}
+
+	/**
+	 * Remove a job from the list. The generated draft itself is kept.
+	 */
+	public static function remove( $id ) {
+		$job = self::get( $id );
+		if ( ! $job || ! self::is_removable( $job ) ) {
+			return false;
+		}
+		wp_clear_scheduled_hook( 'tai_process_job', array( (int) $id ) );
+		wp_delete_post( (int) $id, true );
+		return true;
+	}
+
+	/**
+	 * Remove all of a user's finished jobs.
+	 *
+	 * @return int[] Removed job IDs.
+	 */
+	public static function clear( $user_id ) {
+		$removed = array();
+		foreach ( self::for_user( $user_id, 100 ) as $job ) {
+			if ( self::remove( $job['id'] ) ) {
+				$removed[] = (int) $job['id'];
+			}
+		}
+		return $removed;
 	}
 
 	/**

@@ -103,6 +103,25 @@ class Blocks {
 		return "<!-- wp:paragraph -->\n<p>{$html}</p>\n<!-- /wp:paragraph -->";
 	}
 
+	/**
+	 * Image block for a media library attachment.
+	 */
+	public static function image( $attachment_id, $alt = '' ) {
+		$attachment_id = (int) $attachment_id;
+		$src           = wp_get_attachment_image_url( $attachment_id, 'large' );
+		if ( ! $src ) {
+			return '';
+		}
+		$attrs = wp_json_encode(
+			array(
+				'id'              => $attachment_id,
+				'sizeSlug'        => 'large',
+				'linkDestination' => 'none',
+			)
+		);
+		return "<!-- wp:image {$attrs} -->\n<figure class=\"wp-block-image size-large\"><img src=\"" . esc_url( $src ) . '" alt="' . esc_attr( $alt ) . "\" class=\"wp-image-{$attachment_id}\"/></figure>\n<!-- /wp:image -->";
+	}
+
 	public static function list_block( array $items, $ordered = false ) {
 		$lis = array();
 		foreach ( $items as $item ) {

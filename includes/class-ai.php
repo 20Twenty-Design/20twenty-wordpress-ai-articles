@@ -296,28 +296,136 @@ class AI {
 	/**
 	 * Generate an image.
 	 *
+	 * Tries the chosen image model (or the connector's automatic choice) first. When the provider says a
+	 * model does not exist or this API key has no access to it, that model is remembered as unavailable
+	 * and the next image model offered by the connected providers is tried.
+	 *
 	 * @return string|WP_Error Raw image bytes.
 	 */
 	public static function image( $prompt ) {
 		return self::run(
 			function () use ( $prompt ) {
-				// Prefer a 16:9 image; not every model accepts an aspect ratio, so retry without it.
-				$base = function () use ( $prompt ) {
-					$builder = self::builder( $prompt );
-					$model   = Settings::get( 'image_model' );
-					return $model ? self::chain( $builder, 'using_model_preference', array( $model ) ) : $builder;
-				};
-				$result = self::invoke( self::chain( $base(), 'as_output_media_aspect_ratio', array( '16:9' ) ), 'generate_image_result' );
-				if ( is_wp_error( $result ) ) {
-					$result = self::invoke( $base(), 'generate_image_result' );
+				$tried  = array();
+				$result = null;
+				foreach ( self::image_candidates() as $model ) {
+					if ( '' !== $model && ( isset( $tried[ $model ] ) || self::image_model_unavailable( $model ) ) ) {
+						continue;
+					}
+					$result = self::generate_image( $prompt, $model );
+					if ( ! is_wp_error( $result ) ) {
+						break;
+					}
+					$missing = self::missing_model( $result );
+					if ( '' === $missing ) {
+						break; // Not a model problem (quota, safety, network…): trying other models will not help.
+					}
+					if ( '' === $model || $missing === $model ) {
+						self::remember_unavailable_image_model( $missing );
+					}
+					$tried[ $missing ] = true;
+					$tried[ $model ]   = true;
 				}
-				if ( is_wp_error( $result ) ) {
-					return $result;
+				if ( is_wp_error( $result ) || null === $result ) {
+					return $result ? $result : new WP_Error( 'tai_ai_no_image_model', __( 'None of the connected AI providers offers an image model this API key can use.', 'twenty-ai-articles' ) );
 				}
 				self::record( $result, 'image' );
 				return self::image_bytes( $result );
 			}
 		);
+	}
+
+	/**
+	 * Image models to try, in order: the chosen model, the automatic choice ('' = none), then the rest.
+	 *
+	 * @return string[]
+	 */
+	private static function image_candidates() {
+		$chosen     = (string) Settings::get( 'image_model' );
+		$candidates = array();
+		if ( '' !== $chosen && ! self::image_model_unavailable( $chosen ) ) {
+			$candidates[] = $chosen;
+		}
+		// Skip the automatic choice once it picked a model this key cannot use.
+		if ( ! array_filter( (array) get_option( 'tai_image_unavailable', array() ), array( __CLASS__, 'is_recent' ) ) ) {
+			$candidates[] = '';
+		}
+
+		// Newer, cheaper and better-known models first.
+		$order  = array( 'gpt-image-1.5', 'gpt-image-1-mini', 'gpt-image-1', 'chatgpt-image', 'gpt-image', 'dall-e-3', 'gemini-2.5-flash-image', 'gemini', 'imagen-4', 'imagen', 'dall-e-2' );
+		$rank   = function ( $id ) use ( $order ) {
+			foreach ( $order as $i => $prefix ) {
+				if ( 0 === strpos( $id, $prefix ) ) {
+					return $i;
+				}
+			}
+			return count( $order );
+		};
+		$others = wp_list_pluck( self::available_models( 'image' ), 'id' );
+		usort(
+			$others,
+			function ( $a, $b ) use ( $rank ) {
+				return $rank( $a ) - $rank( $b );
+			}
+		);
+		return array_values( array_unique( array_merge( $candidates, $others ) ) );
+	}
+
+	/**
+	 * One image request, 16:9 when the model accepts an aspect ratio.
+	 *
+	 * @param string $model '' = automatic choice.
+	 * @return object|WP_Error
+	 */
+	private static function generate_image( $prompt, $model ) {
+		$base   = function () use ( $prompt, $model ) {
+			$builder = self::builder( $prompt );
+			return '' !== $model ? self::chain( $builder, 'using_model_preference', array( $model ) ) : $builder;
+		};
+		$result = self::invoke( self::chain( $base(), 'as_output_media_aspect_ratio', array( '16:9' ) ), 'generate_image_result' );
+		if ( is_wp_error( $result ) && '' === self::missing_model( $result ) ) {
+			$result = self::invoke( $base(), 'generate_image_result' );
+		}
+		return $result;
+	}
+
+	/**
+	 * Model ID named in a "model does not exist / no access" error ('' = some other error).
+	 */
+	private static function missing_model( WP_Error $error ) {
+		$message = $error->get_error_message();
+		if ( ! preg_match( '/does not exist|not found|not have access|no access|must be verified|model_not_found|unknown model|not available|not supported for/i', $message ) ) {
+			return '';
+		}
+		if ( preg_match( '/model[^\'"`]{0,20}[\'"`]([A-Za-z0-9._:\/-]+)[\'"`]/i', $message, $m ) ) {
+			return $m[1];
+		}
+		return preg_match( '/\bmodel\b/i', $message ) ? '?' : '';
+	}
+
+	/**
+	 * Image models the API key cannot use, remembered for a week (access can change, e.g. after
+	 * verifying the organization).
+	 */
+	private static function image_model_unavailable( $model ) {
+		$list = get_option( 'tai_image_unavailable', array() );
+		return isset( $list[ $model ] ) && self::is_recent( $list[ $model ] );
+	}
+
+	private static function is_recent( $time ) {
+		return (int) $time > time() - WEEK_IN_SECONDS;
+	}
+
+	private static function remember_unavailable_image_model( $model ) {
+		if ( '' === $model || '?' === $model ) {
+			return;
+		}
+		$list           = (array) get_option( 'tai_image_unavailable', array() );
+		$list[ $model ] = time();
+		update_option( 'tai_image_unavailable', $list, false );
+	}
+
+	public static function forget_unavailable_image_models() {
+		delete_option( 'tai_image_unavailable' );
 	}
 
 	/**

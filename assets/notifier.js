@@ -126,6 +126,18 @@
 		} );
 	}
 
+	// Remove finished jobs from the list right away; put them back if the server refuses.
+	function removeJobs( ids, request ) {
+		const before = ids.map( ( id ) => jobs.get( id ) ).filter( Boolean );
+		ids.forEach( ( id ) => jobs.delete( id ) );
+		update( getAll() );
+		return request.catch( ( err ) => {
+			before.forEach( ( job ) => jobs.set( job.id, job ) );
+			update( getAll() );
+			throw err;
+		} );
+	}
+
 	function markSeen( id ) {
 		const job = jobs.get( id );
 		if ( job ) {
@@ -341,6 +353,12 @@
 		retry: ( id ) => optimistic( id, { state: 'queued', error: '', label: __( 'Restarting…', TD ) }, 'retry' ),
 		cancel: ( id ) => optimistic( id, { state: 'cancelled', label: '' }, 'cancel' ),
 		seen: markSeen,
+		remove: ( id ) => removeJobs( [ id ], wp.apiFetch( { path: '/tai/v1/jobs/' + id + '/remove', method: 'POST' } ) ),
+		clear: () =>
+			removeJobs(
+				getAll().filter( ( j ) => ! isActive( j ) ).map( ( j ) => j.id ),
+				wp.apiFetch( { path: '/tai/v1/jobs/clear', method: 'POST' } )
+			),
 		requestPermission,
 		subscribe( fn ) {
 			listeners.add( fn );

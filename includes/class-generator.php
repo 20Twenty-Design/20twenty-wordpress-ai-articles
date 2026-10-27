@@ -459,8 +459,15 @@ PROMPT;
 		if ( ! empty( $job['post_id'] ) && get_post( $job['post_id'] ) ) {
 			return __( 'Draft already exists.', 'twenty-ai-articles' );
 		}
-		$in   = $job['input'];
-		$plan = $job['plan'];
+		$in      = $job['input'];
+		$plan    = $job['plan'];
+		$content = $job['content'];
+
+		// The image goes right below the title; editors can move it from there.
+		if ( ! empty( $job['image_id'] ) ) {
+			$image   = Blocks::image( $job['image_id'], (string) get_post_meta( $job['image_id'], '_wp_attachment_image_alt', true ) );
+			$content = '' !== $image ? $image . "\n\n" . $content : $content;
+		}
 
 		$post_id = wp_insert_post(
 			wp_slash(
@@ -470,7 +477,7 @@ PROMPT;
 					'post_author'  => $job['user'],
 					'post_title'   => $in['title'],
 					'post_name'    => $plan['slug'],
-					'post_content' => $job['content'],
+					'post_content' => $content,
 					'post_excerpt' => $plan['excerpt'],
 					'meta_input'   => array(
 						'_tai_generated'        => 1,

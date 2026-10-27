@@ -68,7 +68,7 @@ class Seo {
 				update_post_meta( $post_id, '_yoast_wpseo_schema_page_type', 'WebPage' );
 				update_post_meta( $post_id, '_yoast_wpseo_schema_article_type', 'BlogPosting' );
 				if ( $keywords ) {
-					// Related keyphrases (used by Yoast SEO Premium; harmless otherwise).
+					// Related keyphrases: shown by Yoast SEO Premium, kept quietly for a later upgrade on the free version.
 					$related = array_map(
 						function ( $k ) {
 							return array(
@@ -79,9 +79,6 @@ class Seo {
 						$keywords
 					);
 					update_post_meta( $post_id, '_yoast_wpseo_focuskeywords', wp_json_encode( $related ) );
-					if ( ! defined( 'WPSEO_PREMIUM_VERSION' ) ) {
-						$warnings[] = __( 'Yoast SEO free supports one focus keyphrase; secondary keywords were saved but are only shown with Yoast SEO Premium.', 'twenty-ai-articles' );
-					}
 				}
 				break;
 

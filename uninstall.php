@@ -8,6 +8,7 @@ defined( 'WP_UNINSTALL_PLUGIN' ) || exit;
 delete_option( 'tai_settings' );
 delete_option( 'tai_stats' );
 delete_option( 'tai_ai_rejected' );
+delete_option( 'tai_image_unavailable' );
 
 $tai_jobs = get_posts(
 	array(

@@ -79,6 +79,13 @@ Installed sites see new versions on Dashboard → Updates and the Plugins screen
 
 == Changelog ==
 
+= 1.1.2 =
+* New: Remove a single generation, or Clear all finished ones, from "Your generations". Drafts are kept.
+* Fix: "The model 'gpt-image-1' does not exist" now falls back to another image model your API key can use (e.g. DALL·E 3) and remembers the choice.
+* The featured image is also inserted as the first block, right below the title.
+* Yoast SEO free no longer shows a note about secondary keywords.
+* Emoji: no background fill, no bounce or wiggle; only expressions change.
+
 = 1.1.1 =
 * Fix: "Unsupported parameter: temperature" errors with reasoning models (e.g. GPT-5). Temperature and output limits are now only sent where the model accepts them.
 * Higher output limits so reasoning models do not run out of room.

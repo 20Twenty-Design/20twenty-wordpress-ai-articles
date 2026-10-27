@@ -537,6 +537,7 @@
 						? h( Button, { variant: 'tertiary', size: 'small', onClick: () => setOpen( ! open ), 'aria-expanded': open }, open ? __( 'Hide steps', TD ) : __( 'Steps', TD ) )
 						: null,
 					active ? h( Button, { variant: 'tertiary', size: 'small', isDestructive: true, onClick: () => window.taiJobs.cancel( job.id ) }, __( 'Cancel', TD ) ) : null,
+					! active ? h( Button, { variant: 'tertiary', size: 'small', onClick: () => window.taiJobs.remove( job.id ), label: __( 'Remove from the list (the draft is kept)', TD ), showTooltip: true }, __( 'Remove', TD ) ) : null,
 					job.state === 'failed' ? h( Button, { variant: 'secondary', size: 'small', onClick: () => window.taiJobs.retry( job.id ) }, __( 'Retry', TD ) ) : null,
 					job.state === 'done' && job.result
 						? h( Fragment, null,
@@ -559,13 +560,17 @@
 	function JobsPanel( { highlightId } ) {
 		const jobs = useJobs();
 		const [ permission, setPermission ] = useState( 'Notification' in window ? window.Notification.permission : 'unsupported' );
+		const finished = jobs.filter( ( j ) => j.state !== 'queued' && j.state !== 'running' );
 		return h(
 			'section',
 			{ className: 'tai-card tai-jobs' },
 			h(
 				'header',
 				{ className: 'tai-card__head' },
-				h( 'div', { className: 'tai-card__titles' }, h( 'h2', null, __( 'Your generations', TD ) ), h( 'p', null, __( 'Runs in the background — feel free to keep working anywhere in WordPress.', TD ) ) )
+				h( 'div', { className: 'tai-card__titles' }, h( 'h2', null, __( 'Your generations', TD ) ), h( 'p', null, __( 'Runs in the background — feel free to keep working anywhere in WordPress.', TD ) ) ),
+				finished.length
+					? h( Button, { variant: 'tertiary', size: 'small', onClick: () => window.taiJobs.clear(), label: __( 'Clear finished generations from the list. Drafts are kept.', TD ), showTooltip: true }, __( 'Clear', TD ) )
+					: null
 			),
 			permission === 'default'
 				? h(
