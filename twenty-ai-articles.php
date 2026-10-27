@@ -30,6 +30,7 @@ require_once TAI_DIR . 'includes/class-generator.php';
 require_once TAI_DIR . 'includes/class-estimator.php';
 require_once TAI_DIR . 'includes/class-jobs.php';
 require_once TAI_DIR . 'includes/class-rest.php';
+require_once TAI_DIR . 'includes/class-review.php';
 require_once TAI_DIR . 'includes/class-updater.php';
 require_once TAI_DIR . 'includes/class-plugin.php';
 

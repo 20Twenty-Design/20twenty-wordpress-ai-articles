@@ -55,6 +55,14 @@ Cost uses built-in approximate list prices per model (Claude, OpenAI, Google). S
 
 Generated posts expose a `tai_seo` field in the REST API: seo_title, meta_description, focus_keyword, keywords, summary, schema (JSON-LD to print), schema_full (full WebPage + BlogPosting + FAQPage graph).
 
+== Client approval ==
+
+Open a draft in the block editor and use the "Client approval" panel in the sidebar: enter the client's email (a default can be set in Settings) and press Send for approval. The client gets a link that works without logging in, reads the article and presses Approve or Request changes (with a comment). You get an email, and the status shows in the panel and in the posts list. Links expire after 14 days by default and can be withdrawn at any time; they stop working once the article is published (they then redirect to the live article).
+
+Preview page (Settings → AI Articles): the website theme, a simple standalone page (for headless sites without a public theme), or your headless frontend. A headless preview route loads the article from `GET /wp-json/tai/v1/review/{token}` and posts `decision` (approved|changes), `comment` and `name` to the same URL.
+
+Emails are sent with wp_mail(); on hosts without working email, install an SMTP plugin or use Copy link.
+
 == Hosting notes ==
 
 No browser request waits for the AI, so proxy/browser timeouts do not apply. Each stage runs in its own background PHP request with `ignore_user_abort` and no time limit (AI HTTP timeout 240 s). If loopback requests or WP-Cron are blocked (see Tools → Site Health), jobs still progress while a wp-admin screen is open, and the UI explains when a job is waiting for the server.
@@ -80,6 +88,7 @@ Installed sites see new versions on Dashboard → Updates and the Plugins screen
 == Changelog ==
 
 = 1.1.2 =
+* New: Client approval. In the block editor, email a private preview link (no login needed, expires, can be withdrawn). The client approves or requests changes with a comment; you get an email and the status shows in the editor and the posts list. Works with the theme, a standalone page, or a headless frontend (public REST endpoint).
 * New: Remove a single generation, or Clear all finished ones, from "Your generations". Drafts are kept.
 * Fix: "The model 'gpt-image-1' does not exist" now falls back to another image model your API key can use (e.g. DALL·E 3) and remembers the choice.
 * The featured image is also inserted as the first block, right below the title.

@@ -23,6 +23,7 @@ final class Plugin {
 	private function __construct() {
 		Settings::init();
 		Rest::init();
+		Review::init();
 		Seo::init();
 		Jobs::init();
 		Updater::init();

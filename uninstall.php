@@ -22,6 +22,10 @@ foreach ( $tai_jobs as $tai_job ) {
 	wp_delete_post( $tai_job, true );
 }
 
+// Preview links stop working once the plugin is gone.
+delete_post_meta_by_key( '_tai_share' );
+delete_post_meta_by_key( '_tai_share_token' );
+
 global $wpdb;
 $wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name LIKE 'tai\_lock\_%' OR option_name LIKE '\_transient\_tai\_%' OR option_name LIKE '\_transient\_timeout\_tai\_%'" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
 wp_clear_scheduled_hook( 'tai_cleanup_jobs' );

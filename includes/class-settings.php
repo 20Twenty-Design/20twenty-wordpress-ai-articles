@@ -36,6 +36,10 @@ class Settings {
 			'price_text_in'     => '',
 			'price_text_out'    => '',
 			'price_image'       => '',
+			'review_email'      => '',
+			'review_days'       => 14,
+			'review_view'       => 'theme',
+			'review_url'        => '',
 		);
 	}
 
@@ -115,6 +119,17 @@ class Settings {
 		if ( $out['image_model'] !== self::get( 'image_model' ) ) {
 			AI::forget_unavailable_image_models();
 		}
+		$emails              = array_filter( array_map( 'sanitize_email', preg_split( '/[\s,;]+/', (string) ( $input['review_email'] ?? '' ), -1, PREG_SPLIT_NO_EMPTY ) ), 'is_email' );
+		$out['review_email'] = implode( ', ', array_unique( $emails ) );
+		$out['review_days']  = max( 1, min( 90, absint( $input['review_days'] ?? 14 ) ) );
+		$out['review_view']  = in_array( $input['review_view'] ?? '', array( 'theme', 'simple', 'custom' ), true ) ? $input['review_view'] : 'theme';
+		$url                 = trim( sanitize_text_field( (string) ( $input['review_url'] ?? '' ) ) );
+		$out['review_url']   = preg_match( '#^https?://#i', $url ) ? $url : '';
+		if ( 'custom' === $out['review_view'] && ( '' === $out['review_url'] || false === strpos( $out['review_url'], '{token}' ) ) ) {
+			$out['review_view'] = 'theme';
+			add_settings_error( self::OPTION, 'tai_review_url', __( 'The headless preview URL must start with http(s):// and contain {token}. Using the theme preview instead.', 'twenty-ai-articles' ) );
+		}
+
 		$out['image_style'] = sanitize_textarea_field( $input['image_style'] ?? '' );
 		$out['brand_notes'] = sanitize_textarea_field( $input['brand_notes'] ?? '' );
 
@@ -260,6 +275,32 @@ class Settings {
 						<th scope="row"><label for="tai-maxw"><?php esc_html_e( 'Max image width (px)', 'twenty-ai-articles' ); ?></label></th>
 						<td><input id="tai-maxw" type="number" min="600" max="3000" class="small-text" name="<?php echo esc_attr( $name ); ?>[image_max_width]" value="<?php echo esc_attr( $s['image_max_width'] ); ?>">
 							<p class="description"><?php esc_html_e( 'Featured images are resized to this width and saved as WebP at 80% quality.', 'twenty-ai-articles' ); ?></p></td>
+					</tr>
+					<tr>
+						<th scope="row"><?php esc_html_e( 'Client approval', 'twenty-ai-articles' ); ?></th>
+						<td>
+							<p>
+								<label for="tai-review-email" style="display:inline-block;min-width:150px"><?php esc_html_e( 'Default recipient(s)', 'twenty-ai-articles' ); ?></label>
+								<input id="tai-review-email" type="text" class="regular-text" name="<?php echo esc_attr( $name ); ?>[review_email]" value="<?php echo esc_attr( $s['review_email'] ); ?>" placeholder="client@example.com">
+							</p>
+							<p>
+								<label for="tai-review-days" style="display:inline-block;min-width:150px"><?php esc_html_e( 'Links expire after', 'twenty-ai-articles' ); ?></label>
+								<input id="tai-review-days" type="number" min="1" max="90" class="small-text" name="<?php echo esc_attr( $name ); ?>[review_days]" value="<?php echo esc_attr( $s['review_days'] ); ?>"> <?php esc_html_e( 'days', 'twenty-ai-articles' ); ?>
+							</p>
+							<fieldset>
+								<legend style="margin-bottom:4px"><?php esc_html_e( 'Preview page', 'twenty-ai-articles' ); ?></legend>
+								<label style="display:block"><input type="radio" name="<?php echo esc_attr( $name ); ?>[review_view]" value="theme" <?php checked( $s['review_view'], 'theme' ); ?>> <?php esc_html_e( 'Website theme: looks exactly like a published article', 'twenty-ai-articles' ); ?></label>
+								<label style="display:block"><input type="radio" name="<?php echo esc_attr( $name ); ?>[review_view]" value="simple" <?php checked( $s['review_view'], 'simple' ); ?>> <?php esc_html_e( 'Simple page: a clean reading page by this plugin (use on headless sites)', 'twenty-ai-articles' ); ?></label>
+								<label style="display:block"><input type="radio" name="<?php echo esc_attr( $name ); ?>[review_view]" value="custom" <?php checked( $s['review_view'], 'custom' ); ?>> <?php esc_html_e( 'Headless frontend URL:', 'twenty-ai-articles' ); ?></label>
+								<input type="text" class="large-text code" name="<?php echo esc_attr( $name ); ?>[review_url]" value="<?php echo esc_attr( $s['review_url'] ); ?>" placeholder="https://www.example.com/preview?token={token}">
+							</fieldset>
+							<p class="description">
+								<?php
+								/* translators: 1: REST route, 2: placeholders. */
+								echo esc_html( sprintf( __( 'In the block editor, use the "Client approval" panel to email a private preview link that works without logging in. The client can approve or request changes, and you get an email. Headless frontends load the article from GET %1$s and send the decision with POST to the same URL (decision = approved|changes, comment, name). Placeholders: %2$s.', 'twenty-ai-articles' ), rest_url( Rest::NS . '/review/{token}' ), '{token} {id} {slug} {type}' ) );
+								?>
+							</p>
+						</td>
 					</tr>
 					<tr>
 						<th scope="row"><?php esc_html_e( 'Cost estimate prices', 'twenty-ai-articles' ); ?></th>
