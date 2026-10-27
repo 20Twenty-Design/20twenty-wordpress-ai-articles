@@ -9,7 +9,7 @@
 
 	const { createElement: h, useState, useEffect, useMemo, useRef, Fragment } = wp.element;
 	const C = wp.components;
-	const { Button, TextControl, TextareaControl, SelectControl, CheckboxControl, Notice, Spinner } = C;
+	const { Button, TextControl, TextareaControl, SelectControl, CheckboxControl, Notice, Spinner, ExternalLink } = C;
 	const ToggleGroup = C.ToggleGroupControl || C.__experimentalToggleGroupControl;
 	const ToggleOption = C.ToggleGroupControlOption || C.__experimentalToggleGroupControlOption;
 	const { __, sprintf, _n } = wp.i18n;
@@ -470,26 +470,49 @@
 	function JobCard( { job, highlight } ) {
 		const [ open, setOpen ] = useState( false );
 		const active = job.state === 'queued' || job.state === 'running';
+		const done = job.state === 'done' && job.result;
 		const seen = () => window.taiJobs && window.taiJobs.seen( job.id );
+		const warnings = ! active && job.warnings ? job.warnings : [];
+		const steps = job.log || [];
+
+		const meta = [
+			STATE_LABEL[ job.state ] || job.state,
+			done && job.result.category,
+			done && job.result.word_count ? sprintf( __( '%s words', TD ), Number( job.result.word_count ).toLocaleString() ) : null,
+			timeAgo( job.created ),
+		].filter( Boolean );
 
 		return h(
 			'li',
 			{ className: 'tai-job is-' + job.state + ( highlight ? ' is-new' : '' ) },
 			h(
 				'div',
-				{ className: 'tai-job__top' },
-				h( 'span', { className: 'tai-job__title' }, job.title ),
-				h( 'span', { className: 'tai-status is-' + job.state }, STATE_LABEL[ job.state ] || job.state )
+				{ className: 'tai-job__main' },
+				h( 'span', { className: 'tai-job__dot', 'aria-hidden': true } ),
+				h(
+					'div',
+					{ className: 'tai-job__body' },
+					h( 'span', { className: 'tai-job__title' }, job.title ),
+					h( 'span', { className: 'tai-job__meta' }, meta.join( ' · ' ) )
+				),
+				h(
+					'div',
+					{ className: 'tai-job__actions' },
+					done ? h( Button, { variant: 'primary', size: 'small', href: job.result.edit_url, onClick: seen }, __( 'Edit draft', TD ) ) : null,
+					job.state === 'failed' ? h( Button, { variant: 'secondary', size: 'small', onClick: () => window.taiJobs.retry( job.id ) }, __( 'Retry', TD ) ) : null,
+					active
+						? h( Button, { variant: 'tertiary', size: 'small', isDestructive: true, onClick: () => window.taiJobs.cancel( job.id ) }, __( 'Cancel', TD ) )
+						: h( Button, { className: 'tai-job__remove', size: 'small', icon: 'no-alt', label: __( 'Remove from the list (the draft is kept)', TD ), showTooltip: true, onClick: () => window.taiJobs.remove( job.id ) } )
+				)
 			),
 			active
 				? h(
-					Fragment,
-					null,
+					'div',
+					{ className: 'tai-job__progress' },
 					h( 'div', { className: 'tai-bar' }, h( 'span', { style: { width: Math.max( 3, job.progress ) + '%' } } ) ),
 					h(
 						'div',
 						{ className: 'tai-job__label' },
-						h( Spinner ),
 						h( 'span', null, job.stalled ? __( 'Waiting for the server to pick this up…', TD ) : job.label ),
 						h( 'span', { className: 'tai-job__pct' }, job.progress + '%' )
 					),
@@ -499,59 +522,23 @@
 				)
 				: null,
 			job.state === 'failed' ? h( 'p', { className: 'tai-job__error' }, job.error ) : null,
-			job.state === 'done' && job.result
+			! active && ( warnings.length || steps.length )
 				? h(
-					'div',
-					{ className: 'tai-job__result' },
-					job.result.image ? h( 'img', { src: job.result.image, alt: job.result.image_alt || '' } ) : null,
-					h(
-						'dl',
-						null,
-						job.result.category ? h( Fragment, null, h( 'dt', null, __( 'Category', TD ) ), h( 'dd', null, job.result.category ) ) : null,
-						h( 'dt', null, __( 'Keyword', TD ) ),
-						h( 'dd', null, job.result.focus_keyword ),
-						h( 'dt', null, __( 'Words', TD ) ),
-						h( 'dd', null, String( job.result.word_count ) ),
-						h( 'dt', null, __( 'SEO', TD ) ),
-						h( 'dd', null, job.result.seo_plugin || __( 'Built-in (no SEO plugin)', TD ) ),
-						job.result.usage && job.result.usage.tokens
-							? h( Fragment, null,
-								h( 'dt', null, __( 'Used', TD ) ),
-								h( 'dd', null, [ fmtTokens( job.result.usage.tokens ) + ' ' + __( 'tokens', TD ), job.result.usage.cost !== null ? fmtCost( job.result.usage.cost ) : null, job.result.usage.seconds ? fmtTime( job.result.usage.seconds ) : null ].filter( Boolean ).join( ' · ' ) )
-							)
-							: null
-					)
+					'button',
+					{ type: 'button', className: 'tai-job__more', onClick: () => setOpen( ! open ), 'aria-expanded': open },
+					open ? __( 'Hide details', TD ) : __( 'Details', TD ),
+					warnings.length ? h( 'span', { className: 'tai-job__count' }, sprintf( _n( '%d note', '%d notes', warnings.length, TD ), warnings.length ) ) : null
 				)
 				: null,
-			job.warnings && job.warnings.length && ! active
-				? h( 'ul', { className: 'tai-job__warnings' }, job.warnings.map( ( w, i ) => h( 'li', { key: i }, h( Icon, { name: 'info-outline' } ), w ) ) )
-				: null,
-			h(
-				'div',
-				{ className: 'tai-job__foot' },
-				h( 'span', { className: 'tai-job__time' }, timeAgo( job.created ) ),
-				h(
-					'div',
-					{ className: 'tai-row' },
-					job.log && job.log.length
-						? h( Button, { variant: 'tertiary', size: 'small', onClick: () => setOpen( ! open ), 'aria-expanded': open }, open ? __( 'Hide steps', TD ) : __( 'Steps', TD ) )
-						: null,
-					active ? h( Button, { variant: 'tertiary', size: 'small', isDestructive: true, onClick: () => window.taiJobs.cancel( job.id ) }, __( 'Cancel', TD ) ) : null,
-					! active ? h( Button, { variant: 'tertiary', size: 'small', onClick: () => window.taiJobs.remove( job.id ), label: __( 'Remove from the list (the draft is kept)', TD ), showTooltip: true }, __( 'Remove', TD ) ) : null,
-					job.state === 'failed' ? h( Button, { variant: 'secondary', size: 'small', onClick: () => window.taiJobs.retry( job.id ) }, __( 'Retry', TD ) ) : null,
-					job.state === 'done' && job.result
-						? h( Fragment, null,
-							h( Button, { variant: 'secondary', size: 'small', href: job.result.preview_url, target: '_blank', onClick: seen }, __( 'Preview', TD ) ),
-							h( Button, { variant: 'primary', size: 'small', href: job.result.edit_url, onClick: seen }, __( 'Edit draft', TD ) )
-						)
-						: null
-				)
-			),
 			open
 				? h(
-					'ol',
-					{ className: 'tai-job__log' },
-					job.log.map( ( l, i ) => h( 'li', { key: i }, h( Icon, { name: 'yes' } ), h( 'strong', null, l.label ), l.detail ? h( 'span', null, l.detail ) : null ) )
+					'div',
+					{ className: 'tai-job__details' },
+					warnings.length ? h( 'ul', { className: 'tai-job__warnings' }, warnings.map( ( w, i ) => h( 'li', { key: i }, h( Icon, { name: 'info-outline' } ), w ) ) ) : null,
+					steps.length
+						? h( 'ol', { className: 'tai-job__log' }, steps.map( ( l, i ) => h( 'li', { key: i }, h( Icon, { name: 'yes' } ), h( 'strong', null, l.label ), l.detail ? h( 'span', null, l.detail ) : null ) ) )
+						: null,
+					done ? h( ExternalLink, { href: job.result.preview_url, onClick: seen }, __( 'Preview draft', TD ) ) : null
 				)
 				: null
 		);

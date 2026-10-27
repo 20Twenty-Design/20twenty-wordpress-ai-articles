@@ -12,11 +12,8 @@ defined( 'ABSPATH' ) || exit;
  * email. The client can approve or request changes; the sender is notified and the status is shown in
  * the editor and the posts list.
  *
- * Preview page, set in Settings → AI Articles:
- *   theme   The draft rendered by the site's theme, like a published article.
- *   simple  A standalone page rendered by this plugin (for headless sites without a public theme).
- *   custom  A URL on a headless frontend; it loads the article from GET /tai/v1/review/{token}
- *           and sends the decision to POST /tai/v1/review/{token}.
+ * The preview is a standalone page rendered by this plugin, so it works the same on themed and
+ * headless sites.
  */
 class Review {
 
@@ -26,14 +23,12 @@ class Review {
 	const HISTORY   = '_tai_review';
 	const STATUS    = '_tai_review_status';
 
-	/** @var WP_Post|null Draft being previewed in this request. */
-	private static $post;
-
 	public static function init() {
 		add_action( 'rest_api_init', array( __CLASS__, 'routes' ) );
-		add_action( 'wp_loaded', array( __CLASS__, 'maybe_simple_page' ) );
-		add_action( 'pre_get_posts', array( __CLASS__, 'pre_get_posts' ) );
-		add_action( 'template_redirect', array( __CLASS__, 'template_redirect' ), 0 );
+		add_action( 'wp_loaded', array( __CLASS__, 'maybe_preview' ) );
+		// Headless themes and plugins often send every front-end visit to wp-admin or the login page.
+		// If anything redirects a preview away, show the standalone page instead.
+		add_filter( 'wp_redirect', array( __CLASS__, 'keep_preview' ), PHP_INT_MAX );
 		add_action( 'admin_post_tai_review', array( __CLASS__, 'handle_form' ) );
 		add_action( 'admin_post_nopriv_tai_review', array( __CLASS__, 'handle_form' ) );
 		add_filter( 'display_post_states', array( __CLASS__, 'post_states' ), 10, 2 );
@@ -77,23 +72,7 @@ class Review {
 	}
 
 	public static function url( WP_Post $post, $token ) {
-		$view = Settings::get( 'review_view' );
-		if ( 'custom' === $view && Settings::get( 'review_url' ) ) {
-			return strtr(
-				Settings::get( 'review_url' ),
-				array(
-					'{token}' => rawurlencode( $token ),
-					'{id}'    => (int) $post->ID,
-					'{slug}'  => rawurlencode( $post->post_name ),
-					'{type}'  => rawurlencode( $post->post_type ),
-				)
-			);
-		}
-		$args = array( self::QUERY_VAR => $token );
-		if ( 'simple' !== $view ) {
-			$args = array( 'p' => $post->ID ) + ( 'post' === $post->post_type ? array() : array( 'post_type' => $post->post_type ) ) + $args;
-		}
-		return add_query_arg( $args, home_url( '/' ) );
+		return add_query_arg( self::QUERY_VAR, $token, home_url( '/' ) );
 	}
 
 	/**
@@ -261,78 +240,16 @@ class Review {
 	}
 
 	/* ---------------------------------------------------------------------
-	 * Preview: theme
+	 * Preview page
 	 * ------------------------------------------------------------------- */
 
 	private static function requested_token() {
 		return isset( $_GET[ self::QUERY_VAR ] ) ? sanitize_text_field( wp_unslash( $_GET[ self::QUERY_VAR ] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification
 	}
 
-	/**
-	 * Let the main query return the draft for a valid link.
-	 */
-	public static function pre_get_posts( $query ) {
-		if ( is_admin() || ! $query->is_main_query() || '' === self::requested_token() ) {
-			return;
-		}
-		$post = self::find( self::requested_token() );
-		if ( is_wp_error( $post ) || (int) $query->get( 'p' ) !== $post->ID ) {
-			return;
-		}
-		self::$post = $post;
-		$query->set( 'post_status', array( 'draft', 'pending', 'future', 'private', 'publish' ) );
-		add_filter( 'posts_results', array( __CLASS__, 'posts_results' ), 10, 2 );
-		add_filter( 'redirect_canonical', '__return_false' );
-	}
-
-	/**
-	 * Treat the draft as published for this request only, so themes render it normally.
-	 */
-	public static function posts_results( $posts, $query ) {
-		remove_filter( 'posts_results', array( __CLASS__, 'posts_results' ), 10 );
-		if ( $query->is_main_query() && 1 === count( $posts ) && (int) $posts[0]->ID === self::$post->ID ) {
-			$posts[0]->post_status = 'publish';
-		}
-		return $posts;
-	}
-
-	public static function template_redirect() {
-		$token = self::requested_token();
-		if ( '' === $token ) {
-			return;
-		}
-		$post = self::$post ? self::$post : self::find( $token );
-		if ( is_wp_error( $post ) ) {
-			wp_die( esc_html( $post->get_error_message() ), esc_html__( 'Preview unavailable', 'twenty-ai-articles' ), array( 'response' => 410 ) );
-		}
-		if ( 'publish' === get_post_status( $post ) ) {
-			wp_safe_redirect( get_permalink( $post ) );
-			exit;
-		}
-		if ( ! self::$post ) {
-			return; // Token valid but for a different URL; let WordPress handle it.
-		}
-		nocache_headers();
-		header( 'X-Robots-Tag: noindex, nofollow', true );
-		add_filter( 'wp_robots', 'wp_robots_no_robots' );
-		add_action( 'wp_footer', array( __CLASS__, 'theme_bar' ), 100 );
-	}
-
-	public static function theme_bar() {
-		echo self::review_box( self::$post, true ); // phpcs:ignore WordPress.Security.EscapeOutput -- Escaped in review_box().
-	}
-
-	/* ---------------------------------------------------------------------
-	 * Preview: standalone page
-	 * ------------------------------------------------------------------- */
-
-	public static function maybe_simple_page() {
+	public static function maybe_preview() {
 		$token = self::requested_token();
 		if ( '' === $token || is_admin() || wp_doing_ajax() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
-			return;
-		}
-		// Theme links carry ?p=; standalone links only the token.
-		if ( 'simple' !== Settings::get( 'review_view' ) && isset( $_GET['p'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification
 			return;
 		}
 		$post = self::find( $token );
@@ -343,7 +260,25 @@ class Review {
 			wp_safe_redirect( get_permalink( $post ) );
 			exit;
 		}
+		self::preview_page( $post );
+	}
 
+	/**
+	 * A redirect before the preview could render (e.g. a headless plugin on init): render the preview rather than lose the visitor.
+	 */
+	public static function keep_preview( $location ) {
+		if ( '' === self::requested_token() || is_admin() || wp_doing_ajax() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
+			return $location;
+		}
+		$post = self::find( self::requested_token() );
+		if ( is_wp_error( $post ) || 'publish' === get_post_status( $post ) ) {
+			return $location;
+		}
+		self::preview_page( $post );
+	}
+
+	private static function preview_page( WP_Post $post ) {
+		status_header( 200 );
 		nocache_headers();
 		header( 'X-Robots-Tag: noindex, nofollow', true );
 		header( 'Content-Type: text/html; charset=' . get_option( 'blog_charset' ) );
@@ -384,7 +319,7 @@ class Review {
 	}
 
 	/**
-	 * Article data for previews and headless frontends.
+	 * Article data for the preview page.
 	 */
 	public static function public_data( WP_Post $post ) {
 		$GLOBALS['post'] = $post; // phpcs:ignore WordPress.WP.GlobalVariablesOverride
@@ -410,7 +345,7 @@ class Review {
 	}
 
 	/* ---------------------------------------------------------------------
-	 * Approval box (theme + standalone)
+	 * Approval box
 	 * ------------------------------------------------------------------- */
 
 	private static function review_box( WP_Post $post, $fixed ) {
@@ -500,7 +435,7 @@ class Review {
 		);
 		// phpcs:enable
 
-		$back = 'custom' === Settings::get( 'review_view' ) ? add_query_arg( self::QUERY_VAR, $token, home_url( '/' ) ) : self::url( $post, $token );
+		$back = self::url( $post, $token );
 		$back = is_wp_error( $result )
 			? add_query_arg( 'tai_error', rawurlencode( $result->get_error_message() ), $back )
 			: add_query_arg( 'tai_reviewed', $result['decision'], $back );
@@ -594,23 +529,6 @@ class Review {
 				),
 			)
 		);
-		// Public: the secret token is the authorization (for headless frontends).
-		register_rest_route(
-			Rest::NS,
-			'/review/(?P<token>[A-Za-z0-9]+)',
-			array(
-				array(
-					'methods'             => 'GET',
-					'callback'            => array( __CLASS__, 'rest_public_get' ),
-					'permission_callback' => '__return_true',
-				),
-				array(
-					'methods'             => 'POST',
-					'callback'            => array( __CLASS__, 'rest_public_decide' ),
-					'permission_callback' => '__return_true',
-				),
-			)
-		);
 	}
 
 	public static function can_share( WP_REST_Request $request ) {
@@ -656,25 +574,5 @@ class Review {
 	public static function rest_revoke( WP_REST_Request $request ) {
 		self::revoke( (int) $request['id'] );
 		return rest_ensure_response( self::admin_data( get_post( (int) $request['id'] ) ) );
-	}
-
-	public static function rest_public_get( WP_REST_Request $request ) {
-		$post = self::find( $request['token'] );
-		if ( is_wp_error( $post ) ) {
-			return $post;
-		}
-		$response = rest_ensure_response( self::public_data( $post ) );
-		$response->header( 'X-Robots-Tag', 'noindex, nofollow' );
-		$response->header( 'Cache-Control', 'no-store' );
-		return $response;
-	}
-
-	public static function rest_public_decide( WP_REST_Request $request ) {
-		$post = self::find( $request['token'] );
-		if ( is_wp_error( $post ) ) {
-			return $post;
-		}
-		$entry = self::decide( $post, sanitize_key( (string) $request->get_param( 'decision' ) ), (string) $request->get_param( 'comment' ), (string) $request->get_param( 'name' ) );
-		return is_wp_error( $entry ) ? $entry : rest_ensure_response( $entry );
 	}
 }

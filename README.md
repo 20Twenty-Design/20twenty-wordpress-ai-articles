@@ -8,7 +8,7 @@ WordPress plugin that generates complete, SEO-ready **draft** articles with the 
 - Featured image uploaded or AI-generated, converted to WebP at 80% with AI alt text.
 - SEO meta + schema for Yoast SEO, Rank Math, AIOSEO, SEOPress, The SEO Framework (or built-in JSON-LD and a warning when none is installed). Headless-friendly `tai_seo` REST field.
 - Runs in the background with progress in the admin bar and a notification when the draft is ready.
-- Client approval: email a private preview link (no login), the client approves or requests changes. Headless frontends can use `GET/POST /wp-json/tai/v1/review/{token}`.
+- Client approval: email a private preview link (no login), the client approves or requests changes.
 
 ## Install
 

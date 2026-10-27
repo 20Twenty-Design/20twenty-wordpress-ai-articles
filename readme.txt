@@ -59,7 +59,7 @@ Generated posts expose a `tai_seo` field in the REST API: seo_title, meta_descri
 
 Open a draft in the block editor and use the "Client approval" panel in the sidebar: enter the client's email (a default can be set in Settings) and press Send for approval. The client gets a link that works without logging in, reads the article and presses Approve or Request changes (with a comment). You get an email, and the status shows in the panel and in the posts list. Links expire after 14 days by default and can be withdrawn at any time; they stop working once the article is published (they then redirect to the live article).
 
-Preview page (Settings → AI Articles): the website theme, a simple standalone page (for headless sites without a public theme), or your headless frontend. A headless preview route loads the article from `GET /wp-json/tai/v1/review/{token}` and posts `decision` (approved|changes), `comment` and `name` to the same URL.
+The preview is a clean standalone page rendered by this plugin, so it works the same on themed and headless sites (including sites that send front-end visitors to wp-admin).
 
 Emails are sent with wp_mail(); on hosts without working email, install an SMTP plugin or use Copy link.
 
@@ -71,7 +71,7 @@ Jobs are stored as private `tai_job` posts and removed after 14 days.
 
 == Settings ==
 
-Settings → AI Articles: enabled post types, word counts, number of reference articles, brand notes, key takeaways (off by default) / FAQ / H1 block toggles, schema output, image style + max width.
+Settings → AI Articles: enabled post types, word counts, number of reference articles, brand notes, key takeaways / FAQ / H1 block toggles (all off by default), schema output, image style + max width.
 
 == Updates ==
 
@@ -86,6 +86,13 @@ Installed sites see new versions on Dashboard → Updates and the Plugins screen
 3. The "Release" GitHub Action checks the versions match, builds `twenty-ai-articles.zip` and publishes the GitHub release with generated notes. Edit the release notes on GitHub if you like; they appear as the changelog in WordPress.
 
 == Changelog ==
+
+= 1.1.3 =
+* Fix: Client preview links asked for a WordPress login on headless sites that send visitors to wp-admin.
+* Client previews now always use the plugin's standalone page; the theme and headless-URL options (and the public review REST endpoint) are removed. Links sent earlier keep working.
+* "Your generations" redesigned: a compact list with status, category, word count and time; warnings and steps under Details. No image thumbnail.
+* Selected options and step numbers use red outlines instead of a pink fill.
+* Article structure options (Key takeaways, FAQ, H1 block) are all off by default; existing settings are reset to off once on update.
 
 = 1.1.2 =
 * New: Client approval. In the block editor, email a private preview link (no login needed, expires, can be withdrawn). The client approves or requests changes with a comment; you get an email and the status shows in the editor and the posts list. Works with the theme, a standalone page, or a headless frontend (public REST endpoint).

@@ -1,7 +1,6 @@
 .tai-wrap {
 	--tai-accent: #d62827;
 	--tai-accent-dark: #b01f1e;
-	--tai-accent-soft: #fdeeee;
 	/* Brand colour for WordPress components (primary buttons, toggles, focus rings) on this screen. */
 	--wp-admin-theme-color: #d62827;
 	--wp-admin-theme-color--rgb: 214, 40, 39;
@@ -153,7 +152,8 @@
 	width: 28px;
 	height: 28px;
 	border-radius: 50%;
-	background: var(--tai-accent-soft);
+	border: 1.5px solid var(--tai-accent);
+	background: #fff;
 	color: var(--tai-accent);
 	font-weight: 600;
 }
@@ -259,7 +259,7 @@
 
 .tai-tile.is-selected {
 	border-color: var(--tai-accent);
-	background: var(--tai-accent-soft);
+	background: #fff;
 	box-shadow: 0 0 0 1px var(--tai-accent);
 }
 
@@ -337,8 +337,9 @@
 	align-items: center;
 	gap: 4px;
 	padding: 3px 4px 3px 10px;
+	border: 1px solid var(--tai-accent);
 	border-radius: 999px;
-	background: var(--tai-accent-soft);
+	background: #fff;
 	color: var(--tai-accent);
 	font-weight: 500;
 }
@@ -478,67 +479,108 @@
 
 .tai-jobs__list {
 	list-style: none;
-	margin: 0;
+	margin: 0 -4px;
 	padding: 0;
-	display: flex;
-	flex-direction: column;
-	gap: 10px;
 }
 
 .tai-job {
 	margin: 0;
-	padding: 14px;
-	border: 1px solid var(--tai-border);
-	border-radius: 10px;
-	transition: box-shadow 0.3s;
+	padding: 12px 4px;
+	border-top: 1px solid #f0f0f1;
+	border-radius: 8px;
+}
+
+.tai-job:first-child {
+	border-top: 0;
 }
 
 .tai-job.is-new {
 	animation: tai-highlight 1.6s ease-out;
 }
 
-.tai-job__top {
+.tai-job__main {
 	display: flex;
-	gap: 8px;
-	align-items: flex-start;
-	justify-content: space-between;
+	align-items: center;
+	gap: 10px;
+}
+
+.tai-job__dot {
+	flex-shrink: 0;
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+	border: 2px solid #a7aaad;
+	box-sizing: border-box;
+}
+
+.tai-job.is-queued .tai-job__dot,
+.tai-job.is-running .tai-job__dot {
+	border-color: var(--tai-accent);
+	animation: tai-pulse 1.4s ease-in-out infinite;
+}
+
+.tai-job.is-done .tai-job__dot {
+	border-color: #00a32a;
+	background: #00a32a;
+}
+
+.tai-job.is-failed .tai-job__dot {
+	border-color: #d63638;
+	background: #d63638;
+}
+
+.tai-job__body {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
 }
 
 .tai-job__title {
 	font-weight: 600;
+	line-height: 1.35;
 	overflow-wrap: anywhere;
 }
 
-.tai-status {
-	flex-shrink: 0;
-	padding: 2px 8px;
-	border-radius: 999px;
-	font-size: 11px;
-	font-weight: 600;
-	background: #f0f0f1;
-	color: #50575e;
+.tai-job__meta {
+	color: var(--tai-muted);
+	font-size: 12px;
 }
 
-.tai-status.is-running,
-.tai-status.is-queued {
-	background: var(--tai-accent-soft);
-	color: var(--tai-accent);
-}
-
-.tai-status.is-done {
-	background: #edfaef;
-	color: #007017;
-}
-
-.tai-status.is-failed {
-	background: #fcf0f1;
+.tai-job.is-failed .tai-job__meta {
 	color: #b32d2e;
 }
 
+.tai-job__actions {
+	flex-shrink: 0;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.tai-job__remove.components-button {
+	color: #a7aaad;
+	min-width: 28px;
+	padding: 0;
+	justify-content: center;
+}
+
+.tai-job__remove.components-button:hover {
+	color: var(--tai-accent);
+}
+
+.tai-job__progress,
+.tai-job__error,
+.tai-job__more,
+.tai-job__details {
+	margin-left: 20px;
+}
+
 .tai-bar {
-	height: 6px;
-	margin-top: 12px;
-	border-radius: 3px;
+	height: 4px;
+	margin-top: 10px;
+	border-radius: 2px;
 	background: #f0f0f1;
 	overflow: hidden;
 }
@@ -546,7 +588,7 @@
 .tai-bar span {
 	display: block;
 	height: 100%;
-	border-radius: 3px;
+	border-radius: 2px;
 	background: linear-gradient(90deg, var(--tai-accent), #f06a3c, var(--tai-accent));
 	background-size: 200% 100%;
 	animation: tai-shimmer 2s linear infinite;
@@ -555,124 +597,105 @@
 
 .tai-job__label {
 	display: flex;
-	align-items: center;
-	gap: 6px;
-	margin-top: 8px;
+	gap: 8px;
+	margin-top: 6px;
 	color: #50575e;
 	font-size: 12px;
 }
 
-.tai-job__label .components-spinner {
-	margin: 0;
-	width: 14px;
-	height: 14px;
-}
-
-.tai-job__label span:nth-child(2) {
+.tai-job__label span:first-child {
 	flex: 1;
 }
 
 .tai-job__pct {
 	font-variant-numeric: tabular-nums;
 	font-weight: 600;
+	color: var(--tai-accent);
 }
 
 .tai-job__hint {
-	margin: 8px 0 0;
+	margin: 6px 0 0;
 	font-size: 12px;
 	color: #996800;
 }
 
 .tai-job__error {
-	margin: 8px 0 0;
+	margin-top: 6px;
+	margin-bottom: 0;
+	font-size: 12px;
 	color: #b32d2e;
 }
 
-.tai-job__result {
-	display: flex;
-	gap: 12px;
-	margin-top: 10px;
-}
-
-.tai-job__result img {
-	width: 88px;
-	height: 60px;
-	object-fit: cover;
-	border-radius: 6px;
-	flex-shrink: 0;
-}
-
-.tai-job__result dl {
-	display: grid;
-	grid-template-columns: auto 1fr;
-	gap: 2px 10px;
-	margin: 0;
+.tai-job__more {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	margin-top: 6px;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: #50575e;
 	font-size: 12px;
+	cursor: pointer;
 }
 
-.tai-job__result dt {
-	color: var(--tai-muted);
+.tai-job__more:hover {
+	color: var(--tai-accent);
 }
 
-.tai-job__result dd {
-	margin: 0;
-	overflow-wrap: anywhere;
+.tai-job__count {
+	padding: 0 6px;
+	border: 1px solid #dba617;
+	border-radius: 999px;
+	color: #996800;
+	font-size: 11px;
+	line-height: 16px;
+}
+
+.tai-job__details {
+	margin-top: 8px;
+	padding: 10px 12px;
+	border-radius: 8px;
+	background: #f6f7f7;
+	font-size: 12px;
 }
 
 .tai-job__warnings {
-	margin: 10px 0 0;
+	margin: 0 0 8px;
 	padding: 0;
 	list-style: none;
-	font-size: 12px;
 	color: #996800;
 }
 
 .tai-job__warnings li {
 	display: flex;
 	gap: 6px;
-	margin: 4px 0 0;
+	margin: 0 0 4px;
 }
 
-.tai-job__warnings .dashicons {
+.tai-job__warnings .dashicons,
+.tai-job__log .dashicons {
 	font-size: 16px;
 	width: 16px;
 	height: 16px;
 	flex-shrink: 0;
 }
 
-.tai-job__foot {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 8px;
-	margin-top: 12px;
-}
-
-.tai-job__time {
-	color: var(--tai-muted);
-	font-size: 12px;
-}
-
 .tai-job__log {
 	list-style: none;
-	margin: 10px 0 0;
-	padding: 10px 0 0;
-	border-top: 1px solid #f0f0f1;
-	font-size: 12px;
+	margin: 0 0 8px;
+	padding: 0;
 }
 
 .tai-job__log li {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 4px 6px;
-	margin: 0 0 6px;
+	gap: 2px 6px;
+	margin: 0 0 4px;
 }
 
 .tai-job__log .dashicons {
 	color: #00a32a;
-	font-size: 16px;
-	width: 16px;
-	height: 16px;
 }
 
 .tai-job__log span:last-child {
@@ -710,8 +733,9 @@
 	place-items: center;
 	width: 64px;
 	height: 64px;
+	border: 1.5px solid var(--tai-accent);
 	border-radius: 18px;
-	background: var(--tai-accent-soft);
+	background: #fff;
 	color: var(--tai-accent);
 	margin-bottom: 12px;
 }
@@ -745,6 +769,12 @@
 	}
 }
 
+@keyframes tai-pulse {
+	50% {
+		opacity: 0.35;
+	}
+}
+
 @keyframes tai-highlight {
 	from {
 		box-shadow: 0 0 0 3px var(--tai-accent);
@@ -753,7 +783,8 @@
 
 @media (prefers-reduced-motion: reduce) {
 	.tai-bar span,
-	.tai-job.is-new {
+	.tai-job.is-new,
+	.tai-job__dot {
 		animation: none;
 	}
 }
