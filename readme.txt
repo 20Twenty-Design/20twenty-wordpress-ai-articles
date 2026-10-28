@@ -60,6 +60,10 @@ Generated posts expose a `tai_seo` field in the REST API: seo_title, meta_descri
 
 Open a draft and use the "Client approval" panel in the sidebar (a box on the right in the classic editor and page builders): enter the client's email (a default can be set in Settings) and press Send for approval. The client gets a link that works without logging in, reads the article and presses Approve or Request changes (with a comment). You get an email, and the status shows in the panel and in the posts list. Links expire after 14 days by default and can be withdrawn at any time; they stop working once the article is published (they then redirect to the live article).
 
+= Applying feedback with AI =
+
+When the client requests changes, press "Apply these changes with AI" in the panel. If the client replied by email instead, use "Got feedback by email? Apply it with AI" and paste what they wrote. The AI rewrites only the text (paragraphs, headings, list items, button labels, and the title and excerpt when asked). Images, layout and page-builder settings are never touched; requests it cannot do, like a new photo, are listed under "Not changed". It runs in the background and usually takes under a minute. A revision is saved first, so "Compare / undo" restores the previous version. Then send the updated version to the client again.
+
 The preview is a clean standalone page rendered by this plugin, so it works the same on themed and headless sites (including sites that send front-end visitors to wp-admin).
 
 Emails are sent with wp_mail(); on hosts without working email, install an SMTP plugin or use Copy link.
@@ -87,6 +91,9 @@ Installed sites see new versions on Dashboard → Updates and the Plugins screen
 3. The "Release" GitHub Action checks the versions match, builds `twenty-ai-articles.zip` and publishes the GitHub release with generated notes. Edit the release notes on GitHub if you like; they appear as the changelog in WordPress.
 
 == Changelog ==
+
+= 1.1.6 =
+* New: Apply client feedback with AI. One button applies the client's requested changes to the article text; feedback received by email can be pasted in and applied the same way. Only text changes (images and layout stay as they are), a revision is saved first so it can be undone, and the panel lists what was changed and what was not.
 
 = 1.1.5 =
 * Better Avada matching: the five most recent articles are analysed instead of one. Each section gets its own container like in your articles (backgrounds and separator sections included), headings become Avada title elements, bullet lists become checklists, and the call-to-action section keeps its own colours. No duplicate image when your articles rely on Avada's featured image.

@@ -191,6 +191,28 @@ class Review {
 		return $entry;
 	}
 
+	/**
+	 * Feedback the client sent another way (e.g. by email), added by the editor.
+	 *
+	 * @return array The stored entry.
+	 */
+	public static function add_feedback( WP_Post $post, $comment ) {
+		$history = self::history( $post->ID );
+		$last    = $history ? end( $history ) : null;
+		$user    = wp_get_current_user();
+		$entry   = array(
+			'decision' => 'changes',
+			'comment'  => $comment,
+			'name'     => $user->display_name,
+			'source'   => 'manual',
+			'time'     => max( time(), $last ? (int) $last['time'] + 1 : 0 ), // Unique: marks the entry as applied later.
+		);
+		$history[] = $entry;
+		update_post_meta( $post->ID, self::HISTORY, array_slice( $history, -50 ) );
+		update_post_meta( $post->ID, self::STATUS, 'changes' );
+		return $entry;
+	}
+
 	public static function history( $post_id ) {
 		$history = get_post_meta( $post_id, self::HISTORY, true );
 		return is_array( $history ) ? $history : array();
@@ -473,6 +495,8 @@ class Review {
 			'sent'       => (int) ( $share['sent'] ?? 0 ),
 			'history'    => array_reverse( self::history( $post->ID ) ),
 			'published'  => 'publish' === $post->post_status,
+			'revision'   => Revise::view( $post->ID ),
+			'ai'         => AI::is_available(),
 		) + self::status_data( $post->ID );
 	}
 

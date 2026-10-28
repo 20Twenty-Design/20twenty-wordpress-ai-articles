@@ -24,6 +24,7 @@ final class Plugin {
 		Settings::init();
 		Rest::init();
 		Review::init();
+		Revise::init();
 		Seo::init();
 		Jobs::init();
 		Updater::init();

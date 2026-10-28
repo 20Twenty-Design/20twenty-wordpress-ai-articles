@@ -604,7 +604,7 @@ PROMPT;
 		return $lengths[ $job['input']['length'] ]['words'] ?? $lengths['medium']['words'];
 	}
 
-	private static function system() {
+	public static function system() {
 		$notes = trim( (string) Settings::get( 'brand_notes' ) );
 		return sprintf(
 			"You are a senior content writer and SEO editor for the website \"%s\" (%s, %s).\nWebsite language / locale: %s. Write all output in this language unless told otherwise.\nYou write original, helpful, people-first content that follows the site's house style.%s",
