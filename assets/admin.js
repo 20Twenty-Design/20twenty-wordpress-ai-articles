@@ -10,8 +10,6 @@
 	const { createElement: h, useState, useEffect, useMemo, useRef, Fragment } = wp.element;
 	const C = wp.components;
 	const { Button, TextControl, TextareaControl, SelectControl, CheckboxControl, Notice, Spinner, ExternalLink } = C;
-	const ToggleGroup = C.ToggleGroupControl || C.__experimentalToggleGroupControl;
-	const ToggleOption = C.ToggleGroupControlOption || C.__experimentalToggleGroupControlOption;
 	const { __, sprintf, _n } = wp.i18n;
 	const apiFetch = wp.apiFetch;
 	const TD = 'twenty-ai-articles';
@@ -53,7 +51,6 @@
 		return sprintf( _n( '%d day ago', '%d days ago', Math.floor( s / 86400 ), TD ), Math.floor( s / 86400 ) );
 	};
 
-	const Icon = ( { name, className } ) => h( 'span', { className: 'dashicons dashicons-' + name + ( className ? ' ' + className : '' ), 'aria-hidden': true } );
 	// Brand icons from assets/icons, tinted with currentColor via CSS mask.
 	const Svg = ( { name, className } ) =>
 		h( 'span', { className: 'tai-ico' + ( className ? ' ' + className : '' ), style: { '--tai-ico': 'url(' + cfg.iconsUrl + name + '.svg)' }, 'aria-hidden': true } );
@@ -69,7 +66,7 @@
 			h(
 				'header',
 				{ className: 'tai-card__head' },
-				h( 'span', { className: 'tai-card__num' }, n ),
+				h( 'span', { className: 'tai-card__num' }, String( n ).padStart( 2, '0' ) ),
 				h( 'div', { className: 'tai-card__titles' }, h( 'h2', null, title ), help ? h( 'p', null, help ) : null ),
 				aside || null
 			),
@@ -103,32 +100,32 @@
 	}
 
 	function LengthControl( { value, onChange } ) {
-		if ( ToggleGroup && ToggleOption ) {
-			return h(
+		const words = ( cfg.lengths.find( ( l ) => l.value === value ) || {} ).words || 0;
+		return h(
+			'div',
+			null,
+			h( 'p', { className: 'tai-label' }, __( 'Length', TD ) ),
+			h(
 				'div',
-				null,
-				h(
-					ToggleGroup,
-					{ ...field, label: __( 'Length', TD ), value, isBlock: true, onChange },
-					cfg.lengths.map( ( l ) => h( ToggleOption, { key: l.value, value: l.value, label: l.label } ) )
-				),
-				h(
-					'p',
-					{ className: 'tai-help' },
-					value === 'auto'
-						/* translators: %d: word count. */
-						? sprintf( __( 'About %d words — the average of your reference articles.', TD ), ( cfg.lengths.find( ( l ) => l.value === value ) || {} ).words || 0 )
-						/* translators: %d: word count. */
-						: sprintf( __( 'About %d words.', TD ), ( cfg.lengths.find( ( l ) => l.value === value ) || {} ).words || 0 )
+				{ className: 'tai-tabs', role: 'radiogroup', 'aria-label': __( 'Length', TD ) },
+				cfg.lengths.map( ( l ) =>
+					h(
+						'button',
+						{ key: l.value, type: 'button', role: 'radio', 'aria-checked': value === l.value, className: 'tai-tab' + ( value === l.value ? ' is-selected' : '' ), onClick: () => onChange( l.value ) },
+						l.label
+					)
 				)
-			);
-		}
-		return h( Tiles, {
-			value,
-			onChange,
-			label: __( 'Length', TD ),
-			options: cfg.lengths.map( ( l ) => ( { value: l.value, label: l.label, icon: 'pages', hint: '~' + l.words } ) ),
-		} );
+			),
+			h(
+				'p',
+				{ className: 'tai-help' },
+				value === 'auto'
+					/* translators: %d: word count. */
+					? sprintf( __( 'About %d words — the average of your reference articles.', TD ), words )
+					/* translators: %d: word count. */
+					: sprintf( __( 'About %d words.', TD ), words )
+			)
+		);
 	}
 
 	function ImagePicker( { value, onChange } ) {
@@ -163,7 +160,7 @@
 					'div',
 					{ className: 'tai-row' },
 					h( Button, { variant: 'secondary', onClick: open }, value ? __( 'Replace', TD ) : __( 'Open Media Library', TD ) ),
-					value ? h( Button, { variant: 'tertiary', isDestructive: true, onClick: () => { onChange( 0 ); setPreview( null ); } }, __( 'Remove', TD ) ) : null
+					value ? h( Button, { variant: 'tertiary', onClick: () => { onChange( 0 ); setPreview( null ); } }, __( 'Remove', TD ) ) : null
 				)
 			)
 		);
@@ -207,7 +204,7 @@
 							h(
 								'button',
 								{ type: 'button', className: selected.includes( t.id ) ? 'is-selected' : '', onClick: () => toggle( t.id ) },
-								h( Icon, { name: selected.includes( t.id ) ? 'yes' : 'plus-alt2' } ),
+								h( 'span', { className: 'tai-links__box', 'aria-hidden': true } ),
 								h( 'span', { className: 'tai-links__title' }, t.title ),
 								h( 'span', { className: 'tai-links__type' }, t.type )
 							)
@@ -501,8 +498,8 @@
 					done ? h( Button, { variant: 'primary', size: 'small', href: job.result.edit_url, onClick: seen }, __( 'Edit draft', TD ) ) : null,
 					job.state === 'failed' ? h( Button, { variant: 'secondary', size: 'small', onClick: () => window.taiJobs.retry( job.id ) }, __( 'Retry', TD ) ) : null,
 					active
-						? h( Button, { variant: 'tertiary', size: 'small', isDestructive: true, onClick: () => window.taiJobs.cancel( job.id ) }, __( 'Cancel', TD ) )
-						: h( Button, { className: 'tai-job__remove', size: 'small', icon: 'no-alt', label: __( 'Remove from the list (the draft is kept)', TD ), showTooltip: true, onClick: () => window.taiJobs.remove( job.id ) } )
+						? h( Button, { variant: 'tertiary', size: 'small', onClick: () => window.taiJobs.cancel( job.id ) }, __( 'Cancel', TD ) )
+						: h( 'button', { type: 'button', className: 'tai-x tai-job__remove', 'aria-label': __( 'Remove from the list (the draft is kept)', TD ), title: __( 'Remove from the list (the draft is kept)', TD ), onClick: () => window.taiJobs.remove( job.id ) }, '×' )
 				)
 			),
 			active
@@ -534,9 +531,9 @@
 				? h(
 					'div',
 					{ className: 'tai-job__details' },
-					warnings.length ? h( 'ul', { className: 'tai-job__warnings' }, warnings.map( ( w, i ) => h( 'li', { key: i }, h( Icon, { name: 'info-outline' } ), w ) ) ) : null,
+					warnings.length ? h( 'ul', { className: 'tai-job__warnings' }, warnings.map( ( w, i ) => h( 'li', { key: i }, w ) ) ) : null,
 					steps.length
-						? h( 'ol', { className: 'tai-job__log' }, steps.map( ( l, i ) => h( 'li', { key: i }, h( Icon, { name: 'yes' } ), h( 'strong', null, l.label ), l.detail ? h( 'span', null, l.detail ) : null ) ) )
+						? h( 'ol', { className: 'tai-job__log' }, steps.map( ( l, i ) => h( 'li', { key: i }, h( 'strong', null, l.label ), l.detail ? h( 'span', null, l.detail ) : null ) ) )
 						: null,
 					done ? h( ExternalLink, { href: job.result.preview_url, onClick: seen }, __( 'Preview draft', TD ) ) : null
 				)
@@ -563,14 +560,13 @@
 				? h(
 					'div',
 					{ className: 'tai-notify-optin' },
-					h( Icon, { name: 'bell' } ),
 					h( 'span', null, __( 'Get a desktop notification when a draft is ready, even in another tab.', TD ) ),
 					h( Button, { variant: 'link', onClick: () => window.taiJobs.requestPermission().then( setPermission ) }, __( 'Enable', TD ) )
 				)
 				: null,
 			jobs.length
 				? h( 'ul', { className: 'tai-jobs__list' }, jobs.map( ( job ) => h( JobCard, { key: job.id, job, highlight: job.id === highlightId } ) ) )
-				: h( 'div', { className: 'tai-empty' }, h( Icon, { name: 'welcome-write-blog' } ), h( 'p', null, __( 'No generations yet. Your drafts will appear here.', TD ) ) )
+				: h( 'p', { className: 'tai-empty' }, __( 'No generations yet. Your drafts will appear here.', TD ) )
 		);
 	}
 
@@ -611,73 +607,6 @@
 		return form;
 	};
 
-	/**
-	 * Emoji mood: a resting face from the form state, plus short reactions when something changes.
-	 */
-	const REACTIONS = {
-		length: { auto: 'smize', short: 'tongue', medium: 'smile', long: 'taking' },
-		links_mode: { ai: 'nitpicking', selected: 'firm', none: 'speechless' },
-		image_mode: { generate: 'crush', upload: 'dazzling', none: 'sorrow' },
-	};
-
-	function useMood( form, extra ) {
-		const [ reaction, setReaction ] = useState( null );
-		const prev = useRef( form );
-		const timer = useRef();
-		const react = ( face, ms = 2600 ) => {
-			clearTimeout( timer.current );
-			setReaction( face );
-			timer.current = setTimeout( () => setReaction( null ), ms );
-		};
-
-		useEffect( () => {
-			const before = prev.current;
-			prev.current = form;
-			let face = null;
-			Object.keys( REACTIONS ).forEach( ( key ) => {
-				if ( before[ key ] !== form[ key ] ) {
-					face = REACTIONS[ key ][ form[ key ] ] || face;
-				}
-			} );
-			if ( before.cta !== form.cta ) {
-				face = form.cta ? 'wink' : 'sour';
-			}
-			if ( before.category !== form.category ) {
-				face = form.category ? 'firm' : 'nitpicking';
-			}
-			if ( before.copy_acf !== form.copy_acf ) {
-				face = form.copy_acf ? 'wink' : 'graveyard';
-			}
-			if ( before.link_ids.length !== form.link_ids.length ) {
-				face = form.link_ids.length > before.link_ids.length ? 'smile' : 'speechless';
-			}
-			if ( before.attachment_id !== form.attachment_id ) {
-				face = form.attachment_id ? 'crush' : 'sorrow';
-			}
-			if ( before.title !== form.title ) {
-				face = form.title.length > 60 ? 'dumbfounded' : 'dazzling';
-			}
-			if ( before.keyword !== form.keyword || before.instructions !== form.instructions ) {
-				face = 'smize';
-			}
-			if ( face ) {
-				react( face, before.title !== form.title ? 1200 : 2600 );
-			}
-		}, [ form ] );
-
-		useEffect( () => {
-			if ( extra.event ) {
-				react( extra.event, 3500 );
-			}
-		}, [ extra.event, extra.eventId ] );
-
-		let rest = form.title.trim() ? 'smile' : 'blankly';
-		if ( extra.submitting ) {
-			rest = 'laughing';
-		}
-		return extra.submitting ? 'laughing' : reaction || rest;
-	}
-
 	function App() {
 		const { status, checking, check } = useStatus();
 		const [ form, setForm ] = useState( blankForm );
@@ -685,11 +614,7 @@
 		const [ error, setError ] = useState( null );
 		const [ started, setStarted ] = useState( null );
 		const [ showMore, setShowMore ] = useState( false );
-		const [ event, setEvent ] = useState( { event: null, eventId: 0 } );
 		const titleRef = useRef();
-		const mood = useMood( form, { submitting, ...event } );
-		const emote = ( face ) => setEvent( ( e ) => ( { event: face, eventId: e.eventId + 1 } ) );
-		const Emoji = window.taiEmoji;
 
 		const set = ( key ) => ( value ) => setForm( ( f ) => ( { ...f, [ key ]: value } ) );
 		const imageGen = !! ( status && status.image );
@@ -706,7 +631,7 @@
 				'div',
 				{ className: 'tai-app' },
 				h( 'div', { className: 'tai-topbar' }, h( ConnectionPill, { status, checking } ) ),
-				h( 'div', { className: 'tai-connect-wrap' }, Emoji ? h( Emoji, { mood: checking ? 'dumbfounded' : 'die', size: 96 } ) : null, h( ConnectState, { status, checking, onCheck: check } ) )
+				h( ConnectState, { status, checking, onCheck: check } )
 			);
 		}
 
@@ -738,7 +663,6 @@
 						window.taiJobs.upsert( job );
 					}
 					setStarted( job );
-					emote( 'crush' );
 					setForm( ( f ) => ( { ...blankForm(), cta: f.cta, length: f.length, links_mode: f.links_mode, image_mode: f.image_mode, category: 0 } ) );
 					if ( titleRef.current ) {
 						titleRef.current.focus();
@@ -746,7 +670,6 @@
 				} )
 				.catch( ( err ) => {
 					setError( err.message || __( 'Could not start the generation.', TD ) );
-					emote( 'frightened' );
 				} )
 				.finally( () => setSubmitting( false ) );
 		};
@@ -756,15 +679,15 @@
 		const length = cfg.lengths.find( ( l ) => l.value === form.length ) || {};
 
 		const summary = [
-			[ 'pages', sprintf( /* translators: 1: length label, 2: words. */ __( '%1$s · ~%2$d words', TD ), length.label, length.words ) ],
-			[ 'category', category ? category.name : __( 'AI picks the category', TD ) ],
-			[ 'cta', cta ? sprintf( /* translators: %s: page title. */ __( 'CTA → %s', TD ), cta.title ) : __( 'No CTA', TD ) ],
-			[ 'links', { none: __( 'No internal links', TD ), ai: __( 'AI adds internal links', TD ), selected: sprintf( /* translators: %d: pages. */ __( 'Links to %d chosen pages', TD ), form.link_ids.length ) }[ form.links_mode ] ],
-			[ 'image', { generate: __( 'AI image (WebP 80%)', TD ), upload: __( 'Your image (WebP 80%)', TD ), none: __( 'No featured image', TD ) }[ form.image_mode ] ],
-			cfg.seo ? [ 'seo', sprintf( /* translators: %s: plugin. */ __( 'SEO via %s', TD ), cfg.seo.name ) ] : [ 'seo', __( 'No SEO plugin — built-in meta & schema', TD ) ],
+			sprintf( /* translators: 1: length label, 2: words. */ __( '%1$s · ~%2$d words', TD ), length.label, length.words ),
+			category ? category.name : __( 'AI picks the category', TD ),
+			cta ? sprintf( /* translators: %s: page title. */ __( 'CTA → %s', TD ), cta.title ) : __( 'No CTA', TD ),
+			{ none: __( 'No internal links', TD ), ai: __( 'AI adds internal links', TD ), selected: sprintf( /* translators: %d: pages. */ __( 'Links to %d chosen pages', TD ), form.link_ids.length ) }[ form.links_mode ],
+			{ generate: __( 'AI image (WebP 80%)', TD ), upload: __( 'Your image (WebP 80%)', TD ), none: __( 'No featured image', TD ) }[ form.image_mode ],
+			cfg.seo ? sprintf( /* translators: %s: plugin. */ __( 'SEO via %s', TD ), cfg.seo.name ) : __( 'No SEO plugin — built-in meta & schema', TD ),
 		];
 		if ( form.copy_acf && cfg.acf.active ) {
-			summary.push( [ 'acf', __( 'Copies ACF from last article', TD ) ] );
+			summary.push( __( 'Copies ACF from last article', TD ) );
 		}
 
 		return h(
@@ -774,7 +697,7 @@
 				'div',
 				{ className: 'tai-topbar' },
 				h( ConnectionPill, { status, checking } ),
-				cfg.settingsUrl ? h( Button, { variant: 'tertiary', icon: 'admin-generic', href: cfg.settingsUrl }, __( 'Settings', TD ) ) : null
+				cfg.settingsUrl ? h( Button, { className: 'tai-btn-flat', href: cfg.settingsUrl }, __( 'Settings', TD ) ) : null
 			),
 			h(
 				'div',
@@ -820,7 +743,7 @@
 									label: __( 'Category', TD ),
 									value: String( form.category ),
 									onChange: ( v ) => set( 'category' )( parseInt( v, 10 ) || 0 ),
-									options: [ { value: '0', label: __( '✨ Let AI choose', TD ) } ].concat( cfg.categories.map( ( c ) => ( { value: String( c.id ), label: c.name } ) ) ),
+									options: [ { value: '0', label: __( 'Let AI choose', TD ) } ].concat( cfg.categories.map( ( c ) => ( { value: String( c.id ), label: c.name } ) ) ),
 								} )
 								: null
 						),
@@ -892,7 +815,7 @@
 							n: 4,
 							title: __( 'Extras', TD ),
 							help: __( 'Optional fine-tuning.', TD ),
-							aside: h( Button, { variant: 'tertiary', onClick: () => setShowMore( ! showMore ), 'aria-expanded': showMore, icon: showMore ? 'arrow-up-alt2' : 'arrow-down-alt2' }, showMore ? __( 'Less', TD ) : __( 'More', TD ) ),
+							aside: h( 'button', { type: 'button', className: 'tai-linkbtn', onClick: () => setShowMore( ! showMore ), 'aria-expanded': showMore }, showMore ? __( 'Less', TD ) : __( 'More', TD ) ),
 						},
 						cfg.acf.active
 							? h( CheckboxControl, {
@@ -938,9 +861,8 @@
 					h(
 						'section',
 						{ className: 'tai-card tai-summary' },
-						Emoji ? h( 'div', { className: 'tai-summary__emoji' }, h( Emoji, { mood, label: __( 'Mood of the article assistant', TD ) } ) ) : null,
 						h( 'h2', null, __( 'Summary', TD ) ),
-						h( 'ul', null, summary.map( ( [ icon, text ], i ) => h( 'li', { key: i }, h( Svg, { name: icon } ), h( 'span', null, text ) ) ) ),
+						h( 'ul', null, summary.map( ( text, i ) => h( 'li', { key: i }, text ) ) ),
 						started
 							? h(
 								Notice,

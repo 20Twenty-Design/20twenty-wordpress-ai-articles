@@ -135,7 +135,7 @@ class Review {
 			wpautop( esc_html( $intro ) )
 			. self::email_button( $url, __( 'Read and approve the article', 'twenty-ai-articles' ) )
 			/* translators: %s: date. */
-			. '<p style="color:#646970;font-size:13px">' . esc_html( sprintf( __( 'No login needed. The link works until %s. Please do not forward it.', 'twenty-ai-articles' ), wp_date( get_option( 'date_format' ), $share['expires'] ) ) ) . '</p>'
+			. '<p style="color:#8a8a8f;font-size:13px">' . esc_html( sprintf( __( 'No login needed. The link works until %s. Please do not forward it.', 'twenty-ai-articles' ), wp_date( get_option( 'date_format' ), $share['expires'] ) ) ) . '</p>'
 		);
 
 		$headers = array( 'Content-Type: text/html; charset=UTF-8' );
@@ -239,7 +239,7 @@ class Review {
 
 		$body = '<p>' . esc_html( $line ) . '</p>';
 		if ( '' !== $entry['comment'] ) {
-			$body .= '<blockquote style="margin:0 0 16px;padding:10px 14px;border-left:3px solid #d62827;background:#f6f7f7">' . wpautop( esc_html( $entry['comment'] ) ) . '</blockquote>';
+			$body .= '<blockquote style="margin:0 0 16px;padding:10px 14px;border-left:2px solid #111;background:#f4f4f5;border-radius:0 10px 10px 0">' . wpautop( esc_html( $entry['comment'] ) ) . '</blockquote>';
 		}
 		$body .= self::email_button( get_edit_post_link( $post->ID, 'raw' ), __( 'Open the draft', 'twenty-ai-articles' ) );
 
@@ -251,14 +251,14 @@ class Review {
 	 * ------------------------------------------------------------------- */
 
 	private static function email_button( $url, $label ) {
-		return '<p style="margin:24px 0"><a href="' . esc_url( $url ) . '" style="display:inline-block;padding:12px 22px;border-radius:6px;background:#d62827;color:#fff;text-decoration:none;font-weight:600">' . esc_html( $label ) . '</a></p>';
+		return '<p style="margin:24px 0"><a href="' . esc_url( $url ) . '" style="display:inline-block;padding:14px 24px;border-radius:12px;background:#d62827;color:#fff;text-decoration:none;font-weight:600">' . esc_html( $label ) . '</a></p>';
 	}
 
 	private static function email_html( $title, $inner ) {
 		return '<!doctype html><html><head><meta charset="utf-8"><title>' . esc_html( $title ) . '</title></head>'
-			. '<body style="margin:0;padding:24px;background:#f0f0f1;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;font-size:15px;line-height:1.55;color:#1d2327">'
-			. '<div style="max-width:560px;margin:0 auto;padding:28px;border-radius:10px;background:#fff">' . $inner . '</div>'
-			. '<p style="max-width:560px;margin:12px auto 0;color:#8c8f94;font-size:12px;text-align:center">' . esc_html( wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES ) ) . '</p>'
+			. '<body style="margin:0;padding:24px;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;font-size:15px;line-height:1.55;color:#111">'
+			. '<div style="max-width:560px;margin:0 auto;padding:32px;border-radius:20px;background:#fff">' . $inner . '</div>'
+			. '<p style="max-width:560px;margin:12px auto 0;color:#8a8a8f;font-size:12px;text-align:center">' . esc_html( wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES ) ) . '</p>'
 			. '</body></html>';
 	}
 
@@ -316,16 +316,16 @@ class Review {
 <meta name="robots" content="noindex, nofollow">
 <title><?php echo esc_html( $data['title'] ); ?></title>
 <style>
-	body { margin: 0; background: #fff; color: #1d2327; font: 18px/1.7 Georgia, "Times New Roman", serif; }
+	body { margin: 0; background: #fff; color: #111; font: 18px/1.7 Georgia, "Times New Roman", serif; }
 	.tai-p { max-width: 720px; margin: 0 auto; padding: 48px 20px 200px; }
-	.tai-p__site { margin: 0 0 32px; font: 600 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; letter-spacing: .04em; text-transform: uppercase; color: #8c8f94; }
-	.tai-p h1 { margin: 0 0 24px; font-size: 2.2em; line-height: 1.2; }
-	.tai-p img { max-width: 100%; height: auto; border-radius: 6px; }
+	.tai-p__site { margin: 0 0 32px; font: 600 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; letter-spacing: .08em; text-transform: uppercase; color: #8a8a8f; }
+	.tai-p h1 { margin: 0 0 28px; font-size: 2.4em; font-weight: 400; letter-spacing: -0.02em; line-height: 1.15; }
+	.tai-p img { max-width: 100%; height: auto; border-radius: 16px; }
 	.tai-p figure { margin: 1.5em 0; }
-	.tai-p h2, .tai-p h3 { line-height: 1.3; margin: 1.6em 0 .5em; }
-	.tai-p a { color: #d62827; }
-	.tai-p blockquote { margin: 1.5em 0; padding-left: 1em; border-left: 3px solid #d62827; color: #50575e; }
-	.tai-p .wp-block-buttons a, .tai-p .wp-block-button__link { display: inline-block; padding: 12px 22px; border-radius: 6px; background: #d62827; color: #fff; text-decoration: none; font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-size: 16px; }
+	.tai-p h2, .tai-p h3 { font-weight: 500; line-height: 1.3; margin: 1.6em 0 .5em; }
+	.tai-p a { color: #111; text-underline-offset: 3px; }
+	.tai-p blockquote { margin: 1.5em 0; padding-left: 1em; border-left: 2px solid #111; color: #555; }
+	.tai-p .wp-block-buttons a, .tai-p .wp-block-button__link { display: inline-block; padding: 14px 24px; border-radius: 12px; background: #111; color: #fff; text-decoration: none; font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-size: 16px; }
 </style>
 </head>
 <body>
@@ -386,25 +386,26 @@ class Review {
 		?>
 <div id="tai-review" class="tai-review<?php echo $fixed ? ' is-fixed' : ''; ?>">
 <style>
-	.tai-review { box-sizing: border-box; font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #1d2327; }
+	.tai-review { box-sizing: border-box; font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #111; }
 	.tai-review * { box-sizing: border-box; }
 	body { padding-bottom: 160px; }
-	.tai-review.is-fixed { position: fixed; z-index: 99999; left: 0; right: 0; bottom: 0; padding: 14px 16px; background: #fff; border-top: 3px solid #d62827; box-shadow: 0 -6px 24px rgba(0,0,0,.12); }
+	.tai-review.is-fixed { position: fixed; z-index: 99999; left: 0; right: 0; bottom: 0; padding: 16px; background: #fff; border-top: 1px solid #e6e6e8; }
 	.tai-review__in { max-width: 960px; margin: 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
 	.tai-review__msg { flex: 1 1 260px; margin: 0; }
 	.tai-review__msg strong { display: block; }
 	.tai-review form { margin: 0; }
 	.tai-review__actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-	.tai-review button, .tai-review summary { cursor: pointer; padding: 10px 18px; border-radius: 6px; border: 1px solid #d62827; font-family: inherit; font-size: 15px; font-weight: 600; line-height: 1.2; }
+	.tai-review button, .tai-review summary { cursor: pointer; padding: 12px 20px; border-radius: 12px; border: 1px solid #111; font-family: inherit; font-size: 15px; font-weight: 500; line-height: 1.2; }
 	.tai-review .screen-reader-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-	.tai-review .is-primary { background: #d62827; color: #fff; }
-	.tai-review summary { list-style: none; display: inline-block; background: #fff; color: #d62827; }
+	.tai-review .is-primary { background: #d62827; border-color: #d62827; color: #fff; }
+	.tai-review summary { list-style: none; display: inline-block; background: #fff; color: #111; }
 	.tai-review summary::-webkit-details-marker { display: none; }
 	.tai-review details[open] { flex-basis: 100%; }
 	.tai-review details[open] summary { display: none; }
-	.tai-review textarea, .tai-review input[type=text] { width: 100%; margin: 0 0 8px; padding: 8px 10px; border: 1px solid #8c8f94; border-radius: 6px; font: inherit; }
+	.tai-review textarea, .tai-review input[type=text] { width: 100%; margin: 0 0 8px; padding: 8px 10px; border: 1px solid #e6e6e8; border-radius: 12px; font: inherit; }
+	.tai-review textarea:focus, .tai-review input[type=text]:focus { outline: 0; border-color: #111; }
 	.tai-review textarea { min-height: 110px; }
-	.tai-review__error { flex-basis: 100%; margin: 0; color: #b32d2e; }
+	.tai-review__error { flex-basis: 100%; margin: 0; color: #d62827; }
 </style>
 <div class="tai-review__in">
 	<?php if ( $done ) : ?>

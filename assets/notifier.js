@@ -230,7 +230,7 @@
 					: null,
 			] ),
 			el( 'div', { className: 'tai-banner__actions' }, actions ),
-			el( 'button', { type: 'button', className: 'tai-banner__close', 'aria-label': __( 'Dismiss', TD ), onClick: close }, el( 'span', { className: 'dashicons dashicons-no-alt', 'aria-hidden': 'true' } ) ),
+			el( 'button', { type: 'button', className: 'tai-banner__close', 'aria-label': __( 'Dismiss', TD ), onClick: close }, '×' ),
 		] );
 
 		toastRoot.appendChild( node );

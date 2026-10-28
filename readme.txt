@@ -92,6 +92,11 @@ Installed sites see new versions on Dashboard → Updates and the Plugins screen
 
 == Changelog ==
 
+= 1.1.7 =
+* New look: flat black and white design. Red is kept for the main action (Generate draft, Approve) and errors.
+* Removed the assistant emoji. Fewer icons; only the plugin's own icons are used.
+* Length is chosen with simple text tabs. Restyled notifications, client preview page and approval emails.
+
 = 1.1.6 =
 * New: Apply client feedback with AI. One button applies the client's requested changes to the article text; feedback received by email can be pasted in and applied the same way. Only text changes (images and layout stay as they are), a revision is saved first so it can be undone, and the panel lists what was changed and what was not.
 

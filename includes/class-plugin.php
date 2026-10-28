@@ -359,8 +359,7 @@ final class Plugin {
 
 		wp_enqueue_media();
 		wp_enqueue_style( 'tai-admin', TAI_URL . 'assets/admin.css', array( 'wp-components' ), TAI_VERSION );
-		wp_enqueue_script( 'tai-emoji', TAI_URL . 'assets/emoji.js', array( 'wp-element' ), TAI_VERSION, true );
-		wp_enqueue_script( 'tai-admin', TAI_URL . 'assets/admin.js', array( 'wp-element', 'wp-components', 'wp-api-fetch', 'wp-i18n', 'tai-notifier', 'tai-emoji' ), TAI_VERSION, true );
+		wp_enqueue_script( 'tai-admin', TAI_URL . 'assets/admin.js', array( 'wp-element', 'wp-components', 'wp-api-fetch', 'wp-i18n', 'tai-notifier' ), TAI_VERSION, true );
 		wp_set_script_translations( 'tai-admin', 'twenty-ai-articles' );
 
 		$pages   = self::pages();
